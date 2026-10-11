@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b96ae500d713eeb4ebf48583e9671cea, type: 3}
+  m_Name: EmberSpawnSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Embers.EmberSpawnSettings
+  _embersPerCubicMeter: 3
+  _minDensity: 0.99
+  _seed: 1

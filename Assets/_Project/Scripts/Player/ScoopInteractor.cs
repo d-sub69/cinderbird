@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using Cinderbird.Embers;
+using Cinderbird.Sifting;
 using Cinderbird.Terrain;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -5,20 +8,22 @@ using UnityEngine.InputSystem;
 namespace Cinderbird.Player
 {
     /// <summary>
-    /// Digs into the voxel pile the camera is looking at. For now it just logs the removed volume;
-    /// in step 3 the scooped ash and embers go into the sieve.
+    /// Digs into the voxel pile the camera is looking at and puts the ash and embers into the sieve.
     /// </summary>
     public sealed class ScoopInteractor : MonoBehaviour
     {
         [SerializeField] private ScoopSettings _settings;
         [SerializeField] private Transform _camera;
+        [SerializeField] private Sieve _sieve;
         [SerializeField] private InputActionReference _scoopAction;
         [Tooltip("Layers the scoop ray can hit.")]
         [SerializeField] private LayerMask _hitMask = ~0;
 
+        private readonly List<Ember> _extractedEmbers = new List<Ember>();
+
         private void Awake()
         {
-            if (_settings == null || _camera == null || _scoopAction == null)
+            if (_settings == null || _camera == null || _sieve == null || _scoopAction == null)
             {
                 Debug.LogError($"{nameof(ScoopInteractor)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -54,6 +59,12 @@ namespace Cinderbird.Player
 
         private void TryScoop()
         {
+            // Checked before digging so a refused scoop doesn't destroy ash or embers.
+            if (!_sieve.Contents.CanScoop)
+            {
+                return;
+            }
+
             Ray ray = new Ray(_camera.position, _camera.forward);
             if (!Physics.Raycast(ray, out RaycastHit hit, _settings.Reach, _hitMask, QueryTriggerInteraction.Ignore))
             {
@@ -67,9 +78,14 @@ namespace Cinderbird.Player
 
             // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
             Vector3 center = hit.point + ray.direction * (_settings.Radius * _settings.Penetration);
-            DigResult result = chunk.Dig(center, _settings.Radius);
+            _extractedEmbers.Clear();
+            DigResult result = chunk.Dig(center, _settings.Radius, _extractedEmbers);
+            if (!result.RemovedAnyAsh && result.EmberCount == 0)
+            {
+                return;
+            }
 
-            Debug.Log($"Scooped {result.RemovedVolume * 1000f:F1} L of ash. Pile now {chunk.TotalAshVolume:F2} m³.", this);
+            _sieve.Contents.TryAdd(result.RemovedVolume, _extractedEmbers);
         }
     }
 }

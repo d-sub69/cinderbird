@@ -88,6 +88,33 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void SampleDensity_AtSamplePoint_ReturnsThatSample()
+        {
+            VoxelGrid grid = new VoxelGrid(4, 4, 4, 0.5f, new Vector3(1f, 0f, 0f));
+            grid.SetDensity(2, 1, 3, 0.7f);
+
+            Assert.That(grid.SampleDensity(grid.SamplePosition(2, 1, 3)), Is.EqualTo(0.7f).Within(1e-5f));
+        }
+
+        [Test]
+        public void SampleDensity_BetweenSamples_Blends()
+        {
+            VoxelGrid grid = new VoxelGrid(4, 4, 4, 1f, Vector3.zero);
+            grid.SetDensity(1, 1, 1, 1f);
+            grid.SetDensity(2, 1, 1, 0f);
+
+            Assert.That(grid.SampleDensity(new Vector3(1.25f, 1f, 1f)), Is.EqualTo(0.75f).Within(1e-5f));
+        }
+
+        [Test]
+        public void SampleDensity_OutsideGrid_ClampsAndDoesNotThrow()
+        {
+            VoxelGrid grid = new VoxelGrid(4, 4, 4, 1f, Vector3.zero);
+
+            Assert.That(grid.SampleDensity(new Vector3(-10f, 50f, 4f)), Is.EqualTo(VoxelGrid.Air));
+        }
+
+        [Test]
         public void TotalAshVolume_SolidBlock_CountsInteriorSamples()
         {
             VoxelGrid grid = TerrainTestGrids.SolidBlock(4, 0.5f);

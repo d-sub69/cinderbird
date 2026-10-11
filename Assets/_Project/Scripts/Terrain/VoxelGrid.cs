@@ -83,6 +83,33 @@ namespace Cinderbird.Terrain
         }
 
         /// <summary>
+        /// Density at any grid-local position, blended from the 8 surrounding samples.
+        /// Positions outside the grid are clamped to its edge.
+        /// </summary>
+        public float SampleDensity(Vector3 localPosition)
+        {
+            Vector3 cell = (localPosition - Origin) / CellSize;
+            float fx = Mathf.Clamp(cell.x, 0f, CellsX);
+            float fy = Mathf.Clamp(cell.y, 0f, CellsY);
+            float fz = Mathf.Clamp(cell.z, 0f, CellsZ);
+
+            // Clamp the base corner one short of the far edge so x0 + 1 is always a valid sample.
+            int x0 = Mathf.Min(Mathf.FloorToInt(fx), CellsX - 1);
+            int y0 = Mathf.Min(Mathf.FloorToInt(fy), CellsY - 1);
+            int z0 = Mathf.Min(Mathf.FloorToInt(fz), CellsZ - 1);
+            float tx = fx - x0;
+            float ty = fy - y0;
+            float tz = fz - z0;
+
+            float d00 = Mathf.Lerp(GetDensity(x0, y0, z0), GetDensity(x0 + 1, y0, z0), tx);
+            float d10 = Mathf.Lerp(GetDensity(x0, y0 + 1, z0), GetDensity(x0 + 1, y0 + 1, z0), tx);
+            float d01 = Mathf.Lerp(GetDensity(x0, y0, z0 + 1), GetDensity(x0 + 1, y0, z0 + 1), tx);
+            float d11 = Mathf.Lerp(GetDensity(x0, y0 + 1, z0 + 1), GetDensity(x0 + 1, y0 + 1, z0 + 1), tx);
+
+            return Mathf.Lerp(Mathf.Lerp(d00, d10, ty), Mathf.Lerp(d01, d11, ty), tz);
+        }
+
+        /// <summary>
         /// Boundary samples are kept as air so the mesh is always closed at the grid edges.
         /// </summary>
         public bool IsBoundary(int x, int y, int z)

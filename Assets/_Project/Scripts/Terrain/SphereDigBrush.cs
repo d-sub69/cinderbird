@@ -56,7 +56,7 @@ namespace Cinderbird.Terrain
                 }
             }
 
-            return new DigResult(removedFill * grid.CellVolume);
+            return new DigResult(removedFill * grid.CellVolume, 0);
         }
     }
 }

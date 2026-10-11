@@ -2,7 +2,8 @@
     "name": "Cinderbird",
     "rootNamespace": "Cinderbird",
     "references": [
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
