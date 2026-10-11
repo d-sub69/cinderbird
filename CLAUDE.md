@@ -53,10 +53,14 @@ Assets/
     Models/
     Textures/
     Audio/
+    Settings/          input actions and other project-level config assets
+    Tests/
+      EditMode/        unit tests for pure C# logic (must be under Assets/ for Unity to compile them)
   ThirdParty/          imported assets and packages, untouched
-Tests/
-  EditMode/            unit tests for pure C# logic
 ```
+
+Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`), tests into
+`Cinderbird.Tests.EditMode` (`Tests/EditMode/Cinderbird.Tests.EditMode.asmdef`).
 
 ## Architecture rules
 - **Namespaces:** `Cinderbird.<Folder>` (e.g. `Cinderbird.Terrain`, `Cinderbird.Sifting`).
