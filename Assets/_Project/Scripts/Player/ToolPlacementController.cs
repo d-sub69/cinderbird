@@ -24,6 +24,8 @@ namespace Cinderbird.Player
         [SerializeField] private Color _validGhostColor = new Color(0.3f, 1f, 0.4f, 0.35f);
         [SerializeField] private Color _invalidGhostColor = new Color(1f, 0.3f, 0.3f, 0.35f);
 
+        // Reused buffer for the no-placement-zone overlap query; avoids allocating every frame.
+        private readonly Collider[] _zoneHits = new Collider[8];
         private MaterialPropertyBlock _propertyBlock;
         private PlaceableTool _shownGhostOwner;
         private Renderer[] _ghostRenderers = Array.Empty<Renderer>();
@@ -35,6 +37,9 @@ namespace Cinderbird.Player
 
         /// <summary>Whether the tool in hand could be set down where the player is looking.</summary>
         public PlacementResult Placement { get; private set; } = PlacementResult.NoSurface;
+
+        /// <summary>The off-limits area the look point is in, when <see cref="Placement"/> says so.</summary>
+        public NoPlacementZone BlockingZone { get; private set; }
 
         /// <summary>Fires when <see cref="Placing"/> or <see cref="Placement"/> changes, for prompts.</summary>
         public event Action StateChanged;
@@ -111,9 +116,10 @@ namespace Cinderbird.Player
         {
             Ray ray = new Ray(_camera.position, _camera.forward);
             bool hasSurface = Physics.Raycast(ray, out RaycastHit hit, _settings.InteractReach, _groundMask, QueryTriggerInteraction.Ignore);
+            BlockingZone = null;
             if (!hasSurface)
             {
-                return PlacementRules.Evaluate(false, Vector3.up, _settings.MaxPlaceSlope, false, false);
+                return PlacementRules.Evaluate(false, Vector3.up, _settings.MaxPlaceSlope, false, false, false);
             }
 
             _groundPoint = hit.point;
@@ -125,8 +131,25 @@ namespace Cinderbird.Player
             // Lifted just off the ground so the ground itself doesn't count as an obstacle.
             Vector3 probe = hit.point + Vector3.up * (clearance + 0.02f);
             bool blocked = Physics.CheckSphere(probe, clearance, _groundMask, QueryTriggerInteraction.Ignore);
+            BlockingZone = FindNoPlacementZone(hit.point, clearance);
 
-            return PlacementRules.Evaluate(true, hit.normal, _settings.MaxPlaceSlope, onAsh, blocked);
+            return PlacementRules.Evaluate(true, hit.normal, _settings.MaxPlaceSlope, onAsh, BlockingZone != null, blocked);
+        }
+
+        // Zones are usually triggers (the nest's look volume), so this query includes them.
+        private NoPlacementZone FindNoPlacementZone(Vector3 point, float radius)
+        {
+            int count = Physics.OverlapSphereNonAlloc(point, radius, _zoneHits, Physics.AllLayers, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++)
+            {
+                NoPlacementZone zone = _zoneHits[i].GetComponentInParent<NoPlacementZone>();
+                if (zone != null)
+                {
+                    return zone;
+                }
+            }
+
+            return null;
         }
 
         private void ShowGhost(PlaceableTool placing, PlacementResult placement)

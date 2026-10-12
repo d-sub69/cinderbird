@@ -13,6 +13,7 @@ namespace Cinderbird.Player
             Vector3 surfaceNormal,
             float maxSlopeDegrees,
             bool surfaceIsAsh,
+            bool inNoPlacementZone,
             bool spaceBlocked)
         {
             if (!hasSurface)
@@ -24,6 +25,11 @@ namespace Cinderbird.Player
             if (surfaceIsAsh)
             {
                 return PlacementResult.OnAsh;
+            }
+
+            if (inNoPlacementZone)
+            {
+                return PlacementResult.InNoPlacementZone;
             }
 
             if (Vector3.Angle(surfaceNormal, Vector3.up) > maxSlopeDegrees)

@@ -298,6 +298,10 @@ namespace Cinderbird.UI
                 case PlacementResult.OnAsh:
                     _builder.Append("Can't place the ").Append(toolName).Append(" on the ash pile");
                     break;
+                case PlacementResult.InNoPlacementZone:
+                    _builder.Append("Can't place the ").Append(toolName).Append(" in ")
+                        .Append(_placement.BlockingZone != null ? _placement.BlockingZone.AreaName : "here");
+                    break;
                 case PlacementResult.TooSteep:
                     _builder.Append("Too steep to place the ").Append(toolName);
                     break;

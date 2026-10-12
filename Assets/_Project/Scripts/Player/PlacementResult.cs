@@ -11,6 +11,9 @@ namespace Cinderbird.Player
         /// <summary>The ash pile shifts as you dig, so tools only go on solid ground.</summary>
         OnAsh,
 
+        /// <summary>Inside an area marked off-limits, such as the nest.</summary>
+        InNoPlacementZone,
+
         TooSteep,
 
         /// <summary>Something (a wall, the player) is in the way.</summary>
