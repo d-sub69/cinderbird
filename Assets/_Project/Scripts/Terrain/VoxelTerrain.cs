@@ -1,7 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Cinderbird.Embers;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Profiling;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace Cinderbird.Terrain
 {
@@ -22,14 +27,30 @@ namespace Cinderbird.Terrain
         [Tooltip("In Play mode, draw buried embers near the camera in the Scene view while this object is selected.")]
         [SerializeField] private bool _showEmberGizmos;
 
+        // Show up by name in Unity's Profiler, so slow frames can be traced to digging or meshing.
+        private static readonly ProfilerMarker DigMarker = new ProfilerMarker("Cinderbird.Dig");
+        private static readonly ProfilerMarker MeshMarker = new ProfilerMarker("Cinderbird.Mesh");
+
         private AshTerrain _terrain;
         private VoxelChunkView[] _views;
-        private readonly MarchingCubes _mesher = new MarchingCubes();
-        private readonly MeshBuffers _buffers = new MeshBuffers();
+        private MarchingCubes _mesher;
         private readonly List<int> _dirtyChunks = new List<int>();
+        private readonly List<int> _bakedChunks = new List<int>();
+        private readonly List<int> _batchChunks = new List<int>();
+
+        // Enough to keep all worker threads busy; a dig touches at most 8 chunks, so only start-up is split.
+        private const int MeshBatchSize = 32;
 
         /// <summary>Fired after a dig with what it removed and the dug sphere (local center, radius).</summary>
         public event Action<DigResult, Vector3, float> Dug;
+
+        /// <summary>Milliseconds the last dig took in total, including re-meshing; for the performance overlay.</summary>
+        public float LastDigMilliseconds { get; private set; }
+
+        /// <summary>Milliseconds the last re-mesh took (meshing plus collider baking).</summary>
+        public float LastMeshMilliseconds { get; private set; }
+
+        public int LastMeshedChunkCount { get; private set; }
 
         /// <summary>The terrain data; null until Awake has run.</summary>
         public AshTerrain Terrain => _terrain;
@@ -56,8 +77,14 @@ namespace Cinderbird.Terrain
             _terrain = new AshTerrain(world);
             _terrain.Generate(_settings.PileShape);
             SpawnEmbers();
+            _mesher = new MarchingCubes();
             CreateViews();
             RebuildDirtyChunks();
+        }
+
+        private void OnDestroy()
+        {
+            _mesher?.Dispose();
         }
 
         /// <summary>
@@ -70,16 +97,21 @@ namespace Cinderbird.Terrain
                 return default;
             }
 
-            Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
-            DigResult result = _terrain.Dig(localCenter, radius, extractedEmbers);
-            if (!result.RemovedAnyAsh && result.EmberCount == 0)
+            using (DigMarker.Auto())
             {
+                long started = Stopwatch.GetTimestamp();
+                Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
+                DigResult result = _terrain.Dig(localCenter, radius, extractedEmbers);
+                if (!result.RemovedAnyAsh && result.EmberCount == 0)
+                {
+                    return result;
+                }
+
+                RebuildDirtyChunks();
+                LastDigMilliseconds = MillisecondsSince(started);
+                Dug?.Invoke(result, localCenter, radius);
                 return result;
             }
-
-            RebuildDirtyChunks();
-            Dug?.Invoke(result, localCenter, radius);
-            return result;
         }
 
         private void SpawnEmbers()
@@ -113,15 +145,76 @@ namespace Cinderbird.Terrain
             }
         }
 
+        // Meshes every changed chunk in parallel on worker threads, uploads the meshes, then bakes their colliders
+        // in parallel too. All of it finishes this frame, so the hole appears the moment you dig.
         private void RebuildDirtyChunks()
         {
             _terrain.World.TakeDirtyChunks(_dirtyChunks);
-            for (int i = 0; i < _dirtyChunks.Count; i++)
+            if (_dirtyChunks.Count == 0)
             {
-                int chunk = _dirtyChunks[i];
-                _mesher.Polygonize(_terrain.World, chunk, _buffers);
-                _views[chunk].Apply(_buffers);
+                return;
             }
+
+            using (MeshMarker.Auto())
+            {
+                long started = Stopwatch.GetTimestamp();
+                // In batches: meshing all chunks at once (start-up) would hold tens of MB of job memory at the same time.
+                for (int first = 0; first < _dirtyChunks.Count; first += MeshBatchSize)
+                {
+                    _batchChunks.Clear();
+                    int end = Math.Min(first + MeshBatchSize, _dirtyChunks.Count);
+                    for (int i = first; i < end; i++)
+                    {
+                        _batchChunks.Add(_dirtyChunks[i]);
+                    }
+
+                    _mesher.PolygonizeChunks(_terrain.World, _batchChunks);
+                    for (int i = 0; i < _batchChunks.Count; i++)
+                    {
+                        _views[_batchChunks[i]].Apply(_mesher.ResultVertices(i), _mesher.ResultNormals(i), _mesher.ResultIndices(i));
+                    }
+
+                    _mesher.ReleaseResults();
+                }
+
+                BakeColliders();
+                LastMeshMilliseconds = MillisecondsSince(started);
+                LastMeshedChunkCount = _dirtyChunks.Count;
+            }
+        }
+
+        private void BakeColliders()
+        {
+            _bakedChunks.Clear();
+            foreach (int chunk in _dirtyChunks)
+            {
+                if (_views[chunk].HasTriangles)
+                {
+                    _bakedChunks.Add(chunk);
+                }
+            }
+
+            if (_bakedChunks.Count > 0)
+            {
+                NativeArray<EntityId> meshIds = new NativeArray<EntityId>(_bakedChunks.Count, Allocator.TempJob);
+                for (int i = 0; i < _bakedChunks.Count; i++)
+                {
+                    meshIds[i] = _views[_bakedChunks[i]].MeshId;
+                }
+
+                new BakeMeshJob { MeshIds = meshIds }.Schedule(meshIds.Length, 1).Complete();
+                meshIds.Dispose();
+            }
+
+            foreach (int chunk in _dirtyChunks)
+            {
+                _views[chunk].RefreshCollider();
+            }
+        }
+
+        private static float MillisecondsSince(long startTimestamp)
+        {
+            return (float)((Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency);
         }
 
         private void OnDrawGizmosSelected()

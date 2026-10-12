@@ -1,3 +1,5 @@
+using Unity.Collections;
+using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -13,6 +15,10 @@ namespace Cinderbird.Terrain
         private Mesh _mesh;
         private MeshCollider _collider;
 
+        public EntityId MeshId => _mesh.GetEntityId();
+
+        public bool HasTriangles { get; private set; }
+
         public void Initialize(Material material)
         {
             // 32-bit indices: a busy 32³ chunk can exceed the 65k-vertex limit of 16-bit meshes.
@@ -24,16 +30,21 @@ namespace Cinderbird.Terrain
             _collider = GetComponent<MeshCollider>();
         }
 
-        public void Apply(MeshBuffers buffers)
+        /// <summary>Uploads a freshly meshed chunk. Call <see cref="RefreshCollider"/> once its collision is baked.</summary>
+        public void Apply(NativeArray<float3> vertices, NativeArray<float3> normals, NativeArray<int> indices)
         {
             _mesh.Clear();
-            _mesh.SetVertices(buffers.Vertices);
-            _mesh.SetNormals(buffers.Normals);
-            _mesh.SetTriangles(buffers.Indices, 0);
+            _mesh.SetVertices(vertices);
+            _mesh.SetNormals(normals);
+            _mesh.SetIndices(indices, MeshTopology.Triangles, 0);
+            HasTriangles = indices.Length > 0;
+        }
 
-            // The collider caches the mesh it was given; reassigning forces it to rebuild from the new data.
+        public void RefreshCollider()
+        {
+            // The collider caches the mesh it was given; reassigning makes it pick up the new (pre-baked) data.
             _collider.sharedMesh = null;
-            if (buffers.Indices.Count > 0)
+            if (HasTriangles)
             {
                 _collider.sharedMesh = _mesh;
             }

@@ -16,7 +16,10 @@ namespace Cinderbird.Tests.EditMode
         {
             VoxelGrid grid = TerrainTestGrids.Ball(Cells, CellSize, BallRadius, out center);
             MeshBuffers buffers = new MeshBuffers();
-            new MarchingCubes().Polygonize(grid, buffers);
+            using (MarchingCubes mesher = new MarchingCubes())
+            {
+                mesher.Polygonize(grid, buffers);
+            }
             return buffers;
         }
 
@@ -43,7 +46,10 @@ namespace Cinderbird.Tests.EditMode
             VoxelGrid grid = new VoxelGrid(4, 4, 4, 1f, Vector3.zero);
             MeshBuffers buffers = new MeshBuffers();
 
-            new MarchingCubes().Polygonize(grid, buffers);
+            using (MarchingCubes mesher = new MarchingCubes())
+            {
+                mesher.Polygonize(grid, buffers);
+            }
 
             Assert.That(buffers.Indices, Is.Empty);
             Assert.That(buffers.Vertices, Is.Empty);
@@ -56,7 +62,10 @@ namespace Cinderbird.Tests.EditMode
             System.Array.Fill(grid.Densities, VoxelGrid.Ash);
             MeshBuffers buffers = new MeshBuffers();
 
-            new MarchingCubes().Polygonize(grid, buffers);
+            using (MarchingCubes mesher = new MarchingCubes())
+            {
+                mesher.Polygonize(grid, buffers);
+            }
 
             Assert.That(buffers.Indices, Is.Empty);
         }
@@ -146,7 +155,7 @@ namespace Cinderbird.Tests.EditMode
         public void Polygonize_CalledTwice_GivesSameResult()
         {
             VoxelGrid grid = TerrainTestGrids.Ball(Cells, CellSize, BallRadius, out _);
-            MarchingCubes mesher = new MarchingCubes();
+            using MarchingCubes mesher = new MarchingCubes();
             MeshBuffers buffers = new MeshBuffers();
 
             mesher.Polygonize(grid, buffers);

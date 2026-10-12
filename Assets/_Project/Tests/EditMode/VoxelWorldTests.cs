@@ -172,7 +172,7 @@ namespace Cinderbird.Tests.EditMode
             VoxelGrid single = new VoxelGrid(2 * chunkCells, chunkCells, chunkCells, CellSize, Vector3.zero);
             Fill(single, Ball(center, 0.87f));
 
-            MarchingCubes mesher = new MarchingCubes();
+            using MarchingCubes mesher = new MarchingCubes();
             MeshBuffers buffers = new MeshBuffers();
             List<Vector3> positions = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
@@ -224,6 +224,37 @@ namespace Cinderbird.Tests.EditMode
             foreach ((int from, int to) in edges)
             {
                 Assert.That(edges.Contains((to, from)), Is.True, "Crack at the seam");
+            }
+        }
+
+        [Test]
+        public void PolygonizeChunks_InParallel_MatchesMeshingEachChunkAlone()
+        {
+            const int chunkCells = 8;
+            VoxelWorld world = new VoxelWorld(chunkCells, 2, 1, 2, CellSize, Vector3.zero);
+            Fill(world, Ball(new Vector3(2f, 1f, 2f), 0.9f));
+            List<int> all = new List<int>();
+            for (int i = 0; i < world.ChunkCount; i++)
+            {
+                all.Add(i);
+            }
+
+            using MarchingCubes mesher = new MarchingCubes();
+            mesher.PolygonizeChunks(world, all);
+            int[] batchTriangles = new int[world.ChunkCount];
+            for (int i = 0; i < world.ChunkCount; i++)
+            {
+                batchTriangles[i] = mesher.ResultIndices(i).Length;
+            }
+
+            mesher.ReleaseResults();
+
+            MeshBuffers single = new MeshBuffers();
+            for (int i = 0; i < world.ChunkCount; i++)
+            {
+                mesher.Polygonize(world, i, single);
+                Assert.That(batchTriangles[i], Is.EqualTo(single.Indices.Count), $"Chunk {i}");
+                Assert.That(batchTriangles[i], Is.GreaterThan(0), $"Chunk {i} should hold part of the ball");
             }
         }
 
