@@ -3,14 +3,15 @@ using UnityEngine;
 namespace Cinderbird.Terrain
 {
     /// <summary>
-    /// Fills a grid with a noisy mound. The mound is centered on grid-local (0, 0, 0), with the floor at local y = 0.
+    /// Fills a density field (one grid or the whole world) with a noisy mound. The mound is centered on
+    /// field-local (0, 0, 0), with the floor at local y = 0.
     /// </summary>
     public static class AshPileGenerator
     {
         // Keeps different seeds far apart in Perlin space; Perlin repeats at large integer offsets otherwise.
         private const float SeedSpacing = 37.17f;
 
-        public static void Generate(VoxelGrid grid, AshPileShape shape)
+        public static void Generate(IDensityField grid, AshPileShape shape)
         {
             float cellSize = grid.CellSize;
             float noiseOffset = shape.NoiseSeed * SeedSpacing;

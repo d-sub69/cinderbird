@@ -7,7 +7,7 @@ namespace Cinderbird.Terrain
     /// Density field sampled at cell corners. Density is in [-1, 1]: above 0 is ash, below is air,
     /// and the surface is where it crosses 0. Stored as one flat array so meshing can later move to Burst.
     /// </summary>
-    public sealed class VoxelGrid
+    public sealed class VoxelGrid : IDensityField
     {
         public const float Air = -1f;
         public const float Ash = 1f;

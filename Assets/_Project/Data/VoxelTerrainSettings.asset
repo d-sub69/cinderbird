@@ -12,12 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4bd53879aef2be6499e830f8914f566f, type: 3}
   m_Name: VoxelTerrainSettings
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Terrain.VoxelTerrainSettings
-  _cellsX: 32
-  _cellsY: 16
-  _cellsZ: 32
+  _chunkCells: 32
+  _chunksX: 6
+  _chunksY: 3
+  _chunksZ: 6
   _cellSize: 0.25
-  _pileRadius: 3.5
-  _pileHeight: 2.5
-  _noiseAmplitude: 0.3
-  _noiseScale: 0.6
+  _pileRadius: 22
+  _pileHeight: 16
+  _noiseAmplitude: 1.5
+  _noiseScale: 0.08
   _noiseSeed: 1

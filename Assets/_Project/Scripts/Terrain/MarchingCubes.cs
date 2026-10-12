@@ -5,7 +5,7 @@ namespace Cinderbird.Terrain
 {
     /// <summary>
     /// Builds a triangle mesh from a <see cref="VoxelGrid"/>. Vertices are shared between neighboring cells,
-    /// giving a closed, smooth-shaded mesh. Owns a reusable edge cache, so one instance per chunk.
+    /// giving a closed, smooth-shaded mesh. Owns a reusable edge cache, so reuse one instance.
     /// </summary>
     public sealed class MarchingCubes
     {
@@ -16,8 +16,28 @@ namespace Cinderbird.Terrain
         private int[] _edgeVertexCache = Array.Empty<int>();
         private readonly float[] _cornerDensities = new float[8];
 
+        // Where normals look past the grid's edge: the grid itself, or the whole world for a chunk.
+        private IDensityField _neighborhood;
+        private Vector3Int _globalOffset;
+
         public void Polygonize(VoxelGrid grid, MeshBuffers output)
         {
+            Polygonize(grid, grid, Vector3Int.zero, output);
+        }
+
+        /// <summary>
+        /// Meshes one chunk of a world. Its own samples build the surface; neighboring chunks are only read for
+        /// normals at the border, so lighting matches across seams.
+        /// </summary>
+        public void Polygonize(VoxelWorld world, int chunkIndex, MeshBuffers output)
+        {
+            Polygonize(world.GetChunk(chunkIndex), world, world.ChunkSampleOffset(chunkIndex), output);
+        }
+
+        private void Polygonize(VoxelGrid grid, IDensityField neighborhood, Vector3Int globalOffset, MeshBuffers output)
+        {
+            _neighborhood = neighborhood;
+            _globalOffset = globalOffset;
             output.Clear();
             PrepareEdgeCache(grid);
 
@@ -113,15 +133,30 @@ namespace Cinderbird.Terrain
             return vertexIndex;
         }
 
-        private static Vector3 Gradient(VoxelGrid grid, int x, int y, int z)
+        private Vector3 Gradient(VoxelGrid grid, int x, int y, int z)
         {
-            int maxX = grid.SamplesX - 1;
-            int maxY = grid.SamplesY - 1;
-            int maxZ = grid.SamplesZ - 1;
+            // Inside the grid: read it directly, the fast path for almost every vertex.
+            bool interior = x > 0 && y > 0 && z > 0 && x < grid.SamplesX - 1 && y < grid.SamplesY - 1 && z < grid.SamplesZ - 1;
+            if (interior)
+            {
+                return new Vector3(
+                    grid.GetDensity(x + 1, y, z) - grid.GetDensity(x - 1, y, z),
+                    grid.GetDensity(x, y + 1, z) - grid.GetDensity(x, y - 1, z),
+                    grid.GetDensity(x, y, z + 1) - grid.GetDensity(x, y, z - 1));
+            }
 
-            float dx = grid.GetDensity(Math.Min(x + 1, maxX), y, z) - grid.GetDensity(Math.Max(x - 1, 0), y, z);
-            float dy = grid.GetDensity(x, Math.Min(y + 1, maxY), z) - grid.GetDensity(x, Math.Max(y - 1, 0), z);
-            float dz = grid.GetDensity(x, y, Math.Min(z + 1, maxZ)) - grid.GetDensity(x, y, Math.Max(z - 1, 0));
+            // On the grid's border: look into the neighborhood (the neighboring chunks), clamped at its own edge.
+            IDensityField field = _neighborhood;
+            int gx = x + _globalOffset.x;
+            int gy = y + _globalOffset.y;
+            int gz = z + _globalOffset.z;
+            int maxX = field.SamplesX - 1;
+            int maxY = field.SamplesY - 1;
+            int maxZ = field.SamplesZ - 1;
+
+            float dx = field.GetDensity(Math.Min(gx + 1, maxX), gy, gz) - field.GetDensity(Math.Max(gx - 1, 0), gy, gz);
+            float dy = field.GetDensity(gx, Math.Min(gy + 1, maxY), gz) - field.GetDensity(gx, Math.Max(gy - 1, 0), gz);
+            float dz = field.GetDensity(gx, gy, Math.Min(gz + 1, maxZ)) - field.GetDensity(gx, gy, Math.Max(gz - 1, 0));
             return new Vector3(dx, dy, dz);
         }
     }

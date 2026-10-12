@@ -15,7 +15,7 @@ namespace Cinderbird.Tests.EditMode
 
         private static VoxelGrid CreateCenteredGrid()
         {
-            // Same layout VoxelChunk uses: centered in x/z, one air layer below the floor.
+            // Same layout VoxelTerrain uses: centered in x/z, one air layer below the floor.
             Vector3 origin = new Vector3(-CellsXZ * CellSize * 0.5f, -CellSize, -CellsXZ * CellSize * 0.5f);
             return new VoxelGrid(CellsXZ, CellsY, CellsXZ, CellSize, origin);
         }

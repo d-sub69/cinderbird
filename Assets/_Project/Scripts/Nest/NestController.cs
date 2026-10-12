@@ -16,7 +16,7 @@ namespace Cinderbird.Nest
         [SerializeField] private EmberTierCatalog _tierCatalog;
         [SerializeField] private Wallet _wallet;
         [Tooltip("The pile whose buried embers define the total Heat to collect.")]
-        [SerializeField] private VoxelChunk _pile;
+        [SerializeField] private VoxelTerrain _pile;
 
         private NestIntake _intake;
         private int[] _glowByTier;
@@ -55,7 +55,15 @@ namespace Cinderbird.Nest
         // Start, not Awake: the pile spawns its embers in its own Awake.
         private void Start()
         {
-            HeatGoal = EmberValuation.Evaluate(_pile.Embers, _glowByTier, _heatByTier).Heat;
+            if (_pile.Terrain == null)
+            {
+                return;
+            }
+
+            // One-off at start; the mountain can hold tens of thousands of embers spread over many chunks.
+            List<Ember> allEmbers = new List<Ember>();
+            _pile.Terrain.CopyAllEmbers(allEmbers);
+            HeatGoal = EmberValuation.Evaluate(allEmbers, _glowByTier, _heatByTier).Heat;
         }
 
         public void OnPoured(IReadOnlyList<Ember> embers, Vector3 fromPosition)

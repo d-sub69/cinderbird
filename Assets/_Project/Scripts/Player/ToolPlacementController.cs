@@ -126,7 +126,7 @@ namespace Cinderbird.Player
             // Upright, turned to face the same way as the player.
             _placeRotation = Quaternion.Euler(0f, _camera.eulerAngles.y, 0f);
 
-            bool onAsh = hit.collider.GetComponentInParent<VoxelChunk>() != null;
+            bool onAsh = hit.collider.GetComponentInParent<VoxelTerrain>() != null;
             float clearance = _settings.PlaceClearance;
             // Lifted just off the ground so the ground itself doesn't count as an obstacle.
             Vector3 probe = hit.point + Vector3.up * (clearance + 0.02f);

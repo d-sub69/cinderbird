@@ -32,7 +32,7 @@ namespace Cinderbird.UI
         [SerializeField] private Basket _basket;
         [SerializeField] private Wallet _wallet;
         [SerializeField] private NestController _nest;
-        [SerializeField] private VoxelChunk _pile;
+        [SerializeField] private VoxelTerrain _pile;
         [SerializeField] private EmberTierCatalog _tierCatalog;
 
         private readonly StringBuilder _builder = new StringBuilder();
@@ -128,9 +128,9 @@ namespace Cinderbird.UI
             _dirty = true;
         }
 
-        private void OnDug(DigResult result)
+        private void OnDug(DigResult result, Vector3 center, float radius)
         {
-            // Cached here: the total walks the whole grid, too slow to repeat on every HUD refresh.
+            // Read on dig only: it changes only then.
             _pileVolume = _pile.TotalAshVolume;
             _dirty = true;
         }

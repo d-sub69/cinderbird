@@ -34,9 +34,10 @@ namespace Cinderbird.Embers
             }
 
             System.Random random = new System.Random(parameters.Seed);
-            // Stay one cell inside the grid; boundary samples are always air.
-            Vector3 min = grid.Origin + Vector3.one * grid.CellSize;
-            Vector3 size = new Vector3(grid.CellsX - 2, grid.CellsY - 2, grid.CellsZ - 2) * grid.CellSize;
+            // The whole grid: in a multi-chunk world a chunk's edges are seams, not air. Positions are half-open
+            // ([min, min + size)), so an ember on a seam belongs to exactly one chunk.
+            Vector3 min = grid.Origin;
+            Vector3 size = new Vector3(grid.CellsX, grid.CellsY, grid.CellsZ) * grid.CellSize;
 
             int spawned = 0;
             int attemptsLeft = targetCount * MaxAttemptsPerEmber;

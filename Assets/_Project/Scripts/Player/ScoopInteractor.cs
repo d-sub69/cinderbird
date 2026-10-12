@@ -22,12 +22,12 @@ namespace Cinderbird.Player
         [SerializeField] private LayerMask _hitMask = ~0;
 
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
-        private VoxelChunk _targetChunk;
+        private VoxelTerrain _targetTerrain;
         private Vector3 _targetCenter;
         private Vector3 _targetSurfacePoint;
 
         /// <summary>True when the view ray hits diggable ash within reach this frame.</summary>
-        public bool HasTarget => _targetChunk != null;
+        public bool HasTarget => _targetTerrain != null;
 
         private void Awake()
         {
@@ -70,7 +70,7 @@ namespace Cinderbird.Player
 
         private void UpdateTarget()
         {
-            _targetChunk = null;
+            _targetTerrain = null;
             // Scooping needs the sieve in hand; a stowed sieve is inactive.
             if (!_sieve.isActiveAndEnabled)
             {
@@ -83,9 +83,10 @@ namespace Cinderbird.Player
                 return;
             }
 
-            if (hit.collider.TryGetComponent(out VoxelChunk chunk))
+            VoxelTerrain terrain = hit.collider.GetComponentInParent<VoxelTerrain>();
+            if (terrain != null)
             {
-                _targetChunk = chunk;
+                _targetTerrain = terrain;
                 _targetSurfacePoint = hit.point;
                 // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
                 _targetCenter = hit.point + ray.direction * (_settings.Radius * _settings.Penetration);
@@ -96,13 +97,13 @@ namespace Cinderbird.Player
         {
             // Checked before digging so a refused scoop doesn't destroy ash or embers.
             bool pouring = _filler != null && _filler.IsFilling;
-            if (_targetChunk == null || !_sieve.Contents.CanScoop || pouring)
+            if (_targetTerrain == null || !_sieve.Contents.CanScoop || pouring)
             {
                 return;
             }
 
             _extractedEmbers.Clear();
-            DigResult result = _targetChunk.Dig(_targetCenter, _settings.Radius, _extractedEmbers);
+            DigResult result = _targetTerrain.Dig(_targetCenter, _settings.Radius, _extractedEmbers);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
                 return;

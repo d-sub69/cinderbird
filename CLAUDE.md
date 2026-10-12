@@ -16,23 +16,23 @@ upgrades tools until every ember is found. Final ember = phoenix reborn = game e
 - TextMeshPro for UI text
 - Git + Git LFS for binary assets
 
-## Current phase: Prototype 2 — "tools and feel"
-Prototype 1 (scoop → shake → tip → carry → feed, on one chunk) is done. Prototype 2 reworks the core loop
-around tools before scaling up the terrain (Phase 1 of the roadmap).
+## Current phase: Phase 1 — technical foundation
+Prototype 1 (the core loop on one chunk) and Prototype 2 (tools, inventory, placeable basket, hidden
+embers, ash pour) are done and playtested. Phase 1 builds what everything else depends on.
 
-**In scope**
-- A. Sprint (hold Shift, relaxed jog, no stamina) and crouch (hold Ctrl, lowers the view to reach low ash;
-  not for crawling through caves); a center dot that shows whether the pile is within scoop reach
-- B. Scooped embers stay hidden under the ash in the sieve and only glimmer, like in the pile; shaking
-  reveals them
-- C. Tools and inventory: sieve and basket are tools; max 5 tools; one active tool in hand; the basket can
-  be stowed even when full, or placed on solid ground (not on the pile) and poured into; the nest accepts
-  embers from the sieve or the basket; one look-to-interact system
-- Then: playtest the new loop
+**In scope (one committed step each)**
+- 1A. Multi-chunk terrain: `VoxelWorld` of 32³-cell chunks sharing border samples (seamless), world-level
+  dig/volume/sampling, embers per chunk; 48 × 24 × 48 m test mountain (size in settings)
+- 1B. Meshing and collider baking on Jobs + Burst; performance overlay and profiler markers
+- 1C. Ash layers in the voxel data (layer id per sample), per-layer ember tables, locked-layer rule
+  (unlocking by Heat comes with the vertical slice), placeholder layer tints
+- 1D. Save system: changed chunks (quantized + gzip), embers, tools, currencies, player; versioned JSON
+  via JsonUtility, atomic writes, autosave
+- 1E. Game shell: pause/options menu, single `GameBootstrap`, `Main.unity`, performance budget pass
+- Right after Phase 1: ash settling physics
 
-**Later, not now:** ash settling physics (after terrain scaling), ember jostle simulation in sieve/basket and
-physics for a placed basket (Phase 2 polish). Still out of scope: shop, upgrades, helpers, powers, save
-system, layers, valley, audio polish, real models.
+Packages approved for 1B: Mathematics (new), Burst and Collections (already present indirectly; pin them).
+**Still out of scope:** shop, upgrades, helpers, powers, valley, audio polish, real models.
 
 ## Folder structure
 ```
@@ -90,8 +90,10 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   data-oriented so it can be moved there.
 - Embers: emissive material + bloom for all; real point lights only on the nearest few (cap configurable).
 
-## Terrain design (prototype)
-- Density grid per chunk (e.g. 16×16×16 cells, cell size ~0.25 m), values > 0 = ash.
+## Terrain design
+- A `VoxelWorld` of chunks, each a density grid of 32×32×32 cells (cell size 0.25 m), values > 0 = ash.
+  Neighboring chunks share their border samples (writes update every copy) so meshes are seamless; only the
+  world's outer border is forced to air.
 - Dig = subtract a sphere/capsule from the density field; return the **removed ash volume**.
 - Embers are **data points stored per chunk** (position + tier). Embers inside the removed volume move
   into the sieve's contents. Embers are not GameObjects until they are shown in the sieve or basket.
@@ -117,9 +119,12 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   with source URL and license **in the same commit** it is added.
 - Prefer CC0 (Kenney, Quaternius, Poly Haven, ambientCG). CC-BY is fine with credit. No "non-commercial" licenses.
 
-## Definition of done — Prototype 2
-- [ ] I can sprint and crouch, and the center dot tells me when the pile is in scoop reach
-- [ ] Embers in the sieve only glimmer until I shake the ash out
-- [ ] I can switch between sieve and basket, place the basket on the ground, pour into it, pick it up
-      full, and feed the nest from either tool
-- [ ] The new loop feels good for 20 minutes (tested by me + 2–3 friends)
+## Definition of done — Phase 1
+- [ ] I can dig anywhere on a full-size mountain with no visible seams and a steady frame rate
+- [ ] The mountain has visible ash layers; locked layers can't be dug into
+- [ ] I can quit, reload, and continue exactly where I left off (terrain, embers, tools, Glow/Heat)
+- [ ] Esc opens a pause menu with options that persist
+- [ ] The game holds its frame-rate target on the agreed minimum-spec PC
+
+(Prototype 1 and Prototype 2 are done: core loop, tools, inventory, placeable basket, hidden embers, ash
+pour, all playtested.)

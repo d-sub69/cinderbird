@@ -17,7 +17,7 @@ namespace Cinderbird.Embers
 
         /// <param name="floorHeight">Surface points below this local y are ignored; the pile's underside is hidden by the ground.</param>
         public static bool TryFindSurface(
-            VoxelGrid grid,
+            IDensityField grid,
             Vector3 emberPosition,
             float maxDepth,
             float floorHeight,
@@ -50,7 +50,7 @@ namespace Cinderbird.Embers
         }
 
         // Binary search for where density drops below zero between the ember (ash) and the probe end (air).
-        private static float FindCrossing(VoxelGrid grid, Vector3 origin, Vector3 direction, float maxDistance)
+        private static float FindCrossing(IDensityField grid, Vector3 origin, Vector3 direction, float maxDistance)
         {
             float inside = 0f;
             float outside = maxDistance;

@@ -5,33 +5,44 @@ using UnityEngine;
 namespace Cinderbird.Embers
 {
     /// <summary>
-    /// Shows small glowing dots on the pile where buried embers are close to the surface.
-    /// Positions are recalculated only after a dig; the per-frame work is just the twinkle.
+    /// Shows small glowing dots on the mountain where buried embers are close to the surface.
+    /// Candidates are kept per chunk and recalculated only for chunks near a dig; the dots go to the
+    /// candidates nearest the viewer, re-picked a couple of times a second as the player moves.
     /// </summary>
-    [RequireComponent(typeof(VoxelChunk))]
+    [RequireComponent(typeof(VoxelTerrain))]
     public sealed class EmberGlimmerView : MonoBehaviour
     {
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
-        private static readonly System.Comparison<GlimmerPoint> ByDepth = (a, b) => a.Depth.CompareTo(b.Depth);
+
+        // How often the nearest glimmers are re-picked as the viewer moves; picking walks every candidate.
+        private const float ReselectInterval = 0.5f;
 
         [SerializeField] private GlimmerSettings _settings;
         [SerializeField] private EmberTierCatalog _tierCatalog;
         [Tooltip("Small sphere with an emissive URP Lit material and no collider (Ember_Visual works).")]
         [SerializeField] private Renderer _glimmerPrefab;
+        [Tooltip("Glimmers nearest to this (usually the camera) are shown.")]
+        [SerializeField] private Transform _viewer;
 
-        private VoxelChunk _chunk;
+        private VoxelTerrain _terrain;
         private Renderer[] _visuals;
         private Color[] _emissionColors;
         private float[] _phases;
         private int _activeCount;
-        private readonly List<GlimmerPoint> _candidates = new List<GlimmerPoint>();
+        private List<GlimmerPoint>[] _chunkCandidates;
+        private readonly List<int> _chunkScratch = new List<int>();
         private MaterialPropertyBlock _propertyBlock;
+        private float _nextReselectTime;
+
+        // Nearest-N selection buffers, reused so picking doesn't allocate.
+        private float[] _bestDistances;
+        private GlimmerPoint[] _best;
 
         private void Awake()
         {
-            _chunk = GetComponent<VoxelChunk>();
-            if (_settings == null || _tierCatalog == null || _glimmerPrefab == null)
+            _terrain = GetComponent<VoxelTerrain>();
+            if (_settings == null || _tierCatalog == null || _glimmerPrefab == null || _viewer == null)
             {
                 Debug.LogError($"{nameof(EmberGlimmerView)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -46,7 +57,7 @@ namespace Cinderbird.Embers
         {
             if (_visuals != null)
             {
-                _chunk.Dug += OnDug;
+                _terrain.Dug += OnDug;
             }
         }
 
@@ -54,18 +65,41 @@ namespace Cinderbird.Embers
         {
             if (_visuals != null)
             {
-                _chunk.Dug -= OnDug;
+                _terrain.Dug -= OnDug;
             }
         }
 
-        // Start, not Awake: the chunk builds its grid and embers in its own Awake, whose order relative to ours isn't guaranteed.
+        // Start, not Awake: the terrain builds the mountain and its embers in its own Awake.
         private void Start()
         {
-            Recalculate();
+            AshTerrain terrain = _terrain.Terrain;
+            if (terrain == null)
+            {
+                return;
+            }
+
+            _chunkCandidates = new List<GlimmerPoint>[terrain.World.ChunkCount];
+            for (int chunk = 0; chunk < _chunkCandidates.Length; chunk++)
+            {
+                _chunkCandidates[chunk] = new List<GlimmerPoint>();
+                CollectCandidates(terrain, chunk);
+            }
+
+            Reselect();
         }
 
         private void Update()
         {
+            if (_chunkCandidates == null)
+            {
+                return;
+            }
+
+            if (Time.time >= _nextReselectTime)
+            {
+                Reselect();
+            }
+
             if (_settings.TwinkleSpeed <= 0f)
             {
                 return;
@@ -79,9 +113,23 @@ namespace Cinderbird.Embers
             }
         }
 
-        private void OnDug(DigResult result)
+        private void OnDug(DigResult result, Vector3 center, float radius)
         {
-            Recalculate();
+            if (_chunkCandidates == null)
+            {
+                return;
+            }
+
+            // Any ember within glimmer depth of the new hole may have changed, including in neighboring chunks.
+            AshTerrain terrain = _terrain.Terrain;
+            Vector3 reach = Vector3.one * (radius + _settings.MaxDepth + terrain.World.CellSize);
+            terrain.World.ChunksOverlapping(center - reach, center + reach, _chunkScratch);
+            for (int i = 0; i < _chunkScratch.Count; i++)
+            {
+                CollectCandidates(terrain, _chunkScratch[i]);
+            }
+
+            Reselect();
         }
 
         private void CreatePool()
@@ -90,10 +138,12 @@ namespace Cinderbird.Embers
             _visuals = new Renderer[count];
             _emissionColors = new Color[count];
             _phases = new float[count];
+            _bestDistances = new float[count];
+            _best = new GlimmerPoint[count];
 
             for (int i = 0; i < count; i++)
             {
-                // Children of the chunk, so chunk-local surface points can be used as local positions directly.
+                // Children of the terrain, so terrain-local surface points can be used as local positions directly.
                 Renderer visual = Instantiate(_glimmerPrefab, transform);
                 visual.name = $"Glimmer {i}";
                 visual.gameObject.SetActive(false);
@@ -102,33 +152,11 @@ namespace Cinderbird.Embers
             }
         }
 
-        private void Recalculate()
+        private void CollectCandidates(AshTerrain terrain, int chunk)
         {
-            VoxelGrid grid = _chunk.Grid;
-            if (grid == null)
-            {
-                return;
-            }
-
-            CollectCandidates(grid);
-            _candidates.Sort(ByDepth);
-
-            _activeCount = Mathf.Min(_candidates.Count, _visuals.Length);
-            for (int i = 0; i < _visuals.Length; i++)
-            {
-                bool active = i < _activeCount;
-                _visuals[i].gameObject.SetActive(active);
-                if (active)
-                {
-                    ShowGlimmer(i, _candidates[i]);
-                }
-            }
-        }
-
-        private void CollectCandidates(VoxelGrid grid)
-        {
-            _candidates.Clear();
-            EmberField embers = _chunk.Embers;
+            List<GlimmerPoint> candidates = _chunkCandidates[chunk];
+            candidates.Clear();
+            EmberField embers = terrain.EmbersIn(chunk);
 
             for (int i = 0; i < embers.Count; i++)
             {
@@ -138,10 +166,58 @@ namespace Cinderbird.Embers
                     continue;
                 }
 
-                if (EmberGlimmer.TryFindSurface(grid, ember.Position, _settings.MaxDepth, _chunk.LocalFloorHeight,
+                if (EmberGlimmer.TryFindSurface(terrain.World, ember.Position, _settings.MaxDepth, _terrain.LocalFloorHeight,
                         out Vector3 surfacePoint, out float depth))
                 {
-                    _candidates.Add(new GlimmerPoint(surfacePoint, depth, ember.TierIndex));
+                    candidates.Add(new GlimmerPoint(surfacePoint, depth, ember.TierIndex));
+                }
+            }
+        }
+
+        // Keeps the N candidates nearest the viewer with a small insertion sort; N is a couple dozen.
+        private void Reselect()
+        {
+            _nextReselectTime = Time.time + ReselectInterval;
+            Vector3 eye = transform.InverseTransformPoint(_viewer.position);
+            int capacity = _visuals.Length;
+            int count = 0;
+
+            for (int chunk = 0; chunk < _chunkCandidates.Length; chunk++)
+            {
+                List<GlimmerPoint> candidates = _chunkCandidates[chunk];
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    float distance = (candidates[i].SurfacePosition - eye).sqrMagnitude;
+                    if (count == capacity && distance >= _bestDistances[count - 1])
+                    {
+                        continue;
+                    }
+
+                    int slot = count < capacity ? count++ : count - 1;
+                    while (slot > 0 && _bestDistances[slot - 1] > distance)
+                    {
+                        _bestDistances[slot] = _bestDistances[slot - 1];
+                        _best[slot] = _best[slot - 1];
+                        slot--;
+                    }
+
+                    _bestDistances[slot] = distance;
+                    _best[slot] = candidates[i];
+                }
+            }
+
+            _activeCount = count;
+            for (int i = 0; i < capacity; i++)
+            {
+                bool active = i < count;
+                if (_visuals[i].gameObject.activeSelf != active)
+                {
+                    _visuals[i].gameObject.SetActive(active);
+                }
+
+                if (active)
+                {
+                    ShowGlimmer(i, _best[i]);
                 }
             }
         }
