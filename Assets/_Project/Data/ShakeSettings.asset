@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 130872f83be989448a058f7a1a0afdb9, type: 3}
+  m_Name: ShakeSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Sifting.ShakeSettings
+  _maxLitersPerSecond: 120
+  _holdEnergy: 0.35
+  _fullEnergyWiggleSpeed: 1500
+  _riseTime: 0.25
+  _fallTime: 0.4
+  _wiggleSmoothingTime: 0.1
+  _jigglePosition: 0.015
+  _jiggleRotation: 6
+  _jiggleFrequency: 9
+  _dustParticlesPerLiter: 2

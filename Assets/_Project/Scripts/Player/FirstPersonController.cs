@@ -18,6 +18,8 @@ namespace Cinderbird.Player
         [SerializeField] private InputActionReference _moveAction;
         [SerializeField] private InputActionReference _lookAction;
         [SerializeField] private InputActionReference _jumpAction;
+        [Tooltip("Optional. While this action is held the camera stops turning, e.g. so mouse movement can shake the sieve.")]
+        [SerializeField] private InputActionReference _suspendLookAction;
 
         private CharacterController _characterController;
         private FirstPersonMotor _motor;
@@ -49,6 +51,11 @@ namespace Cinderbird.Player
             _moveAction.action.Enable();
             _lookAction.action.Enable();
             _jumpAction.action.Enable();
+            if (_suspendLookAction != null)
+            {
+                _suspendLookAction.action.Enable();
+            }
+
             SetCursorLocked(true);
         }
 
@@ -74,8 +81,9 @@ namespace Cinderbird.Player
 
         private void UpdateLook()
         {
-            // Without this, moving the mouse to click Editor buttons would spin the camera.
-            if (Cursor.lockState == CursorLockMode.Locked)
+            // Without the lock check, moving the mouse to click Editor buttons would spin the camera.
+            bool lookSuspended = _suspendLookAction != null && _suspendLookAction.action.IsPressed();
+            if (Cursor.lockState == CursorLockMode.Locked && !lookSuspended)
             {
                 _look.Apply(_lookAction.action.ReadValue<Vector2>(), _settings.LookSensitivity);
             }
