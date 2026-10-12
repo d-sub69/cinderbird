@@ -13,6 +13,8 @@ namespace Cinderbird.Player
         public readonly float Gravity;
         public readonly float CoyoteTime;
         public readonly float JumpBufferTime;
+        public readonly float SprintMultiplier;
+        public readonly float CrouchMultiplier;
 
         public MotorConfig(
             float walkSpeed,
@@ -21,7 +23,9 @@ namespace Cinderbird.Player
             float jumpHeight,
             float gravity,
             float coyoteTime,
-            float jumpBufferTime)
+            float jumpBufferTime,
+            float sprintMultiplier = 1f,
+            float crouchMultiplier = 1f)
         {
             WalkSpeed = walkSpeed;
             GroundAcceleration = groundAcceleration;
@@ -30,6 +34,8 @@ namespace Cinderbird.Player
             Gravity = gravity;
             CoyoteTime = coyoteTime;
             JumpBufferTime = jumpBufferTime;
+            SprintMultiplier = sprintMultiplier;
+            CrouchMultiplier = crouchMultiplier;
         }
     }
 }

@@ -56,6 +56,8 @@ namespace Cinderbird.Sifting
             {
                 Renderer visual = Object.Instantiate(prefab, parent);
                 visual.name = $"Ember Visual {i}";
+                // Inherit the holder's layer so held embers render with the held-items camera and never clip.
+                visual.gameObject.layer = parent.gameObject.layer;
                 visual.gameObject.SetActive(false);
                 _visuals[i] = visual;
             }

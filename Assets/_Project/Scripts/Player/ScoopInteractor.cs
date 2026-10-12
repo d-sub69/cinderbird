@@ -20,6 +20,11 @@ namespace Cinderbird.Player
         [SerializeField] private LayerMask _hitMask = ~0;
 
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
+        private VoxelChunk _targetChunk;
+        private Vector3 _targetCenter;
+
+        /// <summary>True when the view ray hits diggable ash within reach this frame.</summary>
+        public bool HasTarget => _targetChunk != null;
 
         private void Awake()
         {
@@ -48,6 +53,9 @@ namespace Cinderbird.Player
 
         private void Update()
         {
+            // Every frame, not just on click, so the center dot can show whether a scoop would land.
+            UpdateTarget();
+
             // While the cursor is free, the click is for re-locking it, not for digging.
             if (Cursor.lockState != CursorLockMode.Locked || !_scoopAction.action.WasPressedThisFrame())
             {
@@ -57,29 +65,33 @@ namespace Cinderbird.Player
             TryScoop();
         }
 
-        private void TryScoop()
+        private void UpdateTarget()
         {
-            // Checked before digging so a refused scoop doesn't destroy ash or embers.
-            if (!_sieve.Contents.CanScoop)
-            {
-                return;
-            }
-
+            _targetChunk = null;
             Ray ray = new Ray(_camera.position, _camera.forward);
             if (!Physics.Raycast(ray, out RaycastHit hit, _settings.Reach, _hitMask, QueryTriggerInteraction.Ignore))
             {
                 return;
             }
 
-            if (!hit.collider.TryGetComponent(out VoxelChunk chunk))
+            if (hit.collider.TryGetComponent(out VoxelChunk chunk))
+            {
+                _targetChunk = chunk;
+                // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
+                _targetCenter = hit.point + ray.direction * (_settings.Radius * _settings.Penetration);
+            }
+        }
+
+        private void TryScoop()
+        {
+            // Checked before digging so a refused scoop doesn't destroy ash or embers.
+            if (_targetChunk == null || !_sieve.Contents.CanScoop)
             {
                 return;
             }
 
-            // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
-            Vector3 center = hit.point + ray.direction * (_settings.Radius * _settings.Penetration);
             _extractedEmbers.Clear();
-            DigResult result = chunk.Dig(center, _settings.Radius, _extractedEmbers);
+            DigResult result = _targetChunk.Dig(_targetCenter, _settings.Radius, _extractedEmbers);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
                 return;

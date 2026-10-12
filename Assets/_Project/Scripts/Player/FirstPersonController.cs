@@ -20,10 +20,21 @@ namespace Cinderbird.Player
         [SerializeField] private InputActionReference _jumpAction;
         [Tooltip("Optional. While this action is held the camera stops turning, e.g. so mouse movement can shake the sieve.")]
         [SerializeField] private InputActionReference _suspendLookAction;
+        [Tooltip("Optional. Hold to sprint.")]
+        [SerializeField] private InputActionReference _sprintAction;
+        [Tooltip("Optional. Hold to crouch.")]
+        [SerializeField] private InputActionReference _crouchAction;
+
+        // Keeps the headroom probe slightly narrower than the capsule so walls beside us don't count.
+        private const float HeadroomProbeShrink = 0.9f;
 
         private CharacterController _characterController;
         private FirstPersonMotor _motor;
         private LookRotation _look;
+        private CrouchState _crouch;
+        private float _standHeight;
+        private float _capsuleBottom;
+        private float _eyeBelowTop;
 
         private void Awake()
         {
@@ -38,6 +49,20 @@ namespace Cinderbird.Player
 
             _motor = new FirstPersonMotor(_settings.ToMotorConfig());
             _look = new LookRotation(_settings.MaxPitch, transform.eulerAngles.y);
+            SetUpCrouch();
+        }
+
+        // Measures the standing pose as set up in the Editor, so crouching only needs a target height.
+        private void SetUpCrouch()
+        {
+            _standHeight = _characterController.height;
+            _capsuleBottom = _characterController.center.y - _standHeight * 0.5f;
+            _eyeBelowTop = _capsuleBottom + _standHeight - _cameraPivot.localPosition.y;
+
+            // A CharacterController shorter than its diameter becomes a sphere and misbehaves.
+            float minHeight = _characterController.radius * 2f + 0.01f;
+            float crouchHeight = Mathf.Clamp(_settings.CrouchHeight, minHeight, _standHeight);
+            _crouch = new CrouchState(_standHeight, crouchHeight, _settings.CrouchTransitionSpeed);
         }
 
         private void OnEnable()
@@ -51,10 +76,9 @@ namespace Cinderbird.Player
             _moveAction.action.Enable();
             _lookAction.action.Enable();
             _jumpAction.action.Enable();
-            if (_suspendLookAction != null)
-            {
-                _suspendLookAction.action.Enable();
-            }
+            EnableOptional(_suspendLookAction);
+            EnableOptional(_sprintAction);
+            EnableOptional(_crouchAction);
 
             SetCursorLocked(true);
         }
@@ -76,7 +100,42 @@ namespace Cinderbird.Player
         {
             UpdateCursorLock();
             UpdateLook();
+            UpdateCrouch();
             UpdateMovement();
+        }
+
+        private void UpdateCrouch()
+        {
+            bool wantsCrouch = IsHeld(_crouchAction);
+            float heightBefore = _crouch.Height;
+            bool canStand = heightBefore >= _standHeight || HasHeadroom(heightBefore);
+            _crouch.Tick(wantsCrouch, canStand, Time.deltaTime);
+
+            if (!Mathf.Approximately(_crouch.Height, heightBefore))
+            {
+                ApplyHeight(_crouch.Height);
+            }
+        }
+
+        // Shrinks or grows the capsule from the top, keeping the feet where they are.
+        private void ApplyHeight(float height)
+        {
+            Vector3 center = _characterController.center;
+            _characterController.height = height;
+            _characterController.center = new Vector3(center.x, _capsuleBottom + height * 0.5f, center.z);
+
+            Vector3 eye = _cameraPivot.localPosition;
+            _cameraPivot.localPosition = new Vector3(eye.x, _capsuleBottom + height - _eyeBelowTop, eye.z);
+        }
+
+        private bool HasHeadroom(float currentHeight)
+        {
+            float radius = _characterController.radius;
+            // Start inside our own capsule's top sphere; casts ignore colliders they start inside, including ours.
+            Vector3 topSphere = transform.TransformPoint(new Vector3(0f, _capsuleBottom + currentHeight - radius, 0f));
+            float distance = _standHeight - currentHeight + _characterController.skinWidth;
+            return !Physics.SphereCast(topSphere, radius * HeadroomProbeShrink, Vector3.up, out _, distance,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
         }
 
         private void UpdateLook()
@@ -99,6 +158,8 @@ namespace Cinderbird.Player
                 _motor.RequestJump();
             }
 
+            _motor.SetStance(IsHeld(_sprintAction), _crouch.IsCrouching);
+
             Vector2 moveInput = _moveAction.action.ReadValue<Vector2>();
             Vector3 direction = transform.right * moveInput.x + transform.forward * moveInput.y;
 
@@ -109,6 +170,19 @@ namespace Cinderbird.Player
             if ((flags & CollisionFlags.Above) != 0)
             {
                 _motor.NotifyHitCeiling();
+            }
+        }
+
+        private static bool IsHeld(InputActionReference action)
+        {
+            return action != null && action.action.IsPressed();
+        }
+
+        private static void EnableOptional(InputActionReference action)
+        {
+            if (action != null)
+            {
+                action.action.Enable();
             }
         }
 

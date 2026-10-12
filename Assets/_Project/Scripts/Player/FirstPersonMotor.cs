@@ -16,6 +16,8 @@ namespace Cinderbird.Player
         private Vector3 _velocity;
         private float _timeSinceGrounded = float.PositiveInfinity;
         private float _timeSinceJumpRequested = float.PositiveInfinity;
+        private bool _sprinting;
+        private bool _crouching;
 
         public FirstPersonMotor(MotorConfig config)
         {
@@ -23,6 +25,13 @@ namespace Cinderbird.Player
         }
 
         public Vector3 Velocity => _velocity;
+
+        /// <summary>Crouching wins over sprinting and blocks jumping.</summary>
+        public void SetStance(bool sprinting, bool crouching)
+        {
+            _sprinting = sprinting;
+            _crouching = crouching;
+        }
 
         public void RequestJump()
         {
@@ -74,7 +83,7 @@ namespace Cinderbird.Player
         private void UpdateHorizontal(Vector3 desiredDirection, bool isGrounded, float deltaTime)
         {
             desiredDirection.y = 0f;
-            Vector3 target = Vector3.ClampMagnitude(desiredDirection, 1f) * _config.WalkSpeed;
+            Vector3 target = Vector3.ClampMagnitude(desiredDirection, 1f) * (_config.WalkSpeed * SpeedMultiplier());
             float acceleration = isGrounded ? _config.GroundAcceleration : _config.AirAcceleration;
 
             Vector3 horizontal = new Vector3(_velocity.x, 0f, _velocity.z);
@@ -84,8 +93,24 @@ namespace Cinderbird.Player
             _velocity.z = horizontal.z;
         }
 
+        private float SpeedMultiplier()
+        {
+            if (_crouching)
+            {
+                return _config.CrouchMultiplier;
+            }
+
+            return _sprinting ? _config.SprintMultiplier : 1f;
+        }
+
         private void TryJump()
         {
+            // Jumping from a crouch would push the shrunken capsule's head into whatever made us crouch.
+            if (_crouching)
+            {
+                return;
+            }
+
             bool jumpBuffered = _timeSinceJumpRequested <= _config.JumpBufferTime;
             bool canJump = _timeSinceGrounded <= _config.CoyoteTime;
             if (!jumpBuffered || !canJump)

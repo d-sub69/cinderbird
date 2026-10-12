@@ -16,21 +16,23 @@ upgrades tools until every ember is found. Final ember = phoenix reborn = game e
 - TextMeshPro for UI text
 - Git + Git LFS for binary assets
 
-## Current phase: Prototype 1 — "the feel"
-Goal: prove that digging and sifting ash feels satisfying for 20 minutes **with no upgrades and no real art**.
+## Current phase: Prototype 2 — "tools and feel"
+Prototype 1 (scoop → shake → tip → carry → feed, on one chunk) is done. Prototype 2 reworks the core loop
+around tools before scaling up the terrain (Phase 1 of the roadmap).
 
 **In scope**
-1. First-person controller (walk, look, jump; no sprint needed)
-2. A small diggable ash pile (voxel terrain, marching cubes)
-3. Scoop: aim at the pile, click to scoop; ash volume is removed from the terrain and goes into the sieve
-4. Shake: hold a key / wiggle the mouse; dust particles fall from the sieve, ash amount drops to zero,
-   embers that were inside the scooped volume remain visible in the sieve
-5. Tip the sieve into a carried basket
-6. Walk to the nest and pour the basket in; the nest fire flares; a Glow and Heat counter goes up
-7. Placeholder grey materials, simple debug UI
+- A. Sprint (hold Shift, relaxed jog, no stamina) and crouch (hold Ctrl, lowers the view to reach low ash;
+  not for crawling through caves); a center dot that shows whether the pile is within scoop reach
+- B. Scooped embers stay hidden under the ash in the sieve and only glimmer, like in the pile; shaking
+  reveals them
+- C. Tools and inventory: sieve and basket are tools; max 5 tools; one active tool in hand; the basket can
+  be stowed even when full, or placed on solid ground (not on the pile) and poured into; the nest accepts
+  embers from the sieve or the basket; one look-to-interact system
+- Then: playtest the new loop
 
-**Out of scope for now:** shop, upgrades, helpers, powers, save system, layers, valley, audio polish,
-real models. Do not build these until Prototype 1 is approved.
+**Later, not now:** ash settling physics (after terrain scaling), ember jostle simulation in sieve/basket and
+physics for a placed basket (Phase 2 polish). Still out of scope: shop, upgrades, helpers, powers, save
+system, layers, valley, audio polish, real models.
 
 ## Folder structure
 ```
@@ -54,6 +56,7 @@ Assets/
     Textures/
     Audio/
     Settings/          input actions and other project-level config assets
+    Editor/            editor-only setup tooling (menu Cinderbird → Setup → …), namespace Cinderbird.EditorTools
     Tests/
       EditMode/        unit tests for pure C# logic (must be under Assets/ for Unity to compile them)
   ThirdParty/          imported assets and packages, untouched
@@ -97,10 +100,14 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 ## How to work with me (Art)
 - I am an experienced developer (C#-like X++ background) but new to Unity. Explain Unity-specific concepts
   briefly when they first come up.
-- Work in **small, testable steps**. After each step, tell me exactly what to do in the Unity Editor
-  (create object, add component, assign references) as a short numbered list.
-- **Never hand-edit** `.unity`, `.prefab`, `.asset` YAML or `.meta` files. Create scripts; I do the
-  Editor setup from your instructions.
+- Work in **small, testable steps**. Since Prototype 2, each step ships with an **Editor setup command**
+  (`Assets/_Project/Editor/SetupStep*.cs`, menu **Cinderbird → Setup → …**) that does the scene/asset wiring
+  through Unity's API: idempotent, Undo-aware, saves the scene. I run it, then test. Tell me what to click
+  and what to test; only list manual Editor steps for things a script can't reasonably do (e.g. look tuning).
+  **The menu only lists uncommitted steps:** when a step is committed, its `SetupStep*.cs` is deleted in that
+  same commit (its result lives in the committed scene/assets); `SetupUtility.cs` stays.
+- **Never hand-edit** `.unity`, `.prefab`, `.asset` YAML or `.meta` files. Setup goes through Editor scripts
+  using Unity's API (SerializedObject, AssetDatabase, Undo), never by writing those files directly.
 - **Ask before** adding any package or third-party asset.
 - Write EditMode tests for pure logic (terrain math, economy formulas).
 - When a change touches several systems, propose the plan first and wait for my OK.
@@ -110,8 +117,9 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   with source URL and license **in the same commit** it is added.
 - Prefer CC0 (Kenney, Quaternius, Poly Haven, ambientCG). CC-BY is fine with credit. No "non-commercial" licenses.
 
-## Definition of done — Prototype 1
-- [ ] I can walk up to the pile, scoop, shake, and see embers left in the sieve
-- [ ] The pile visibly shrinks where I dig, with no frame drops on my machine
-- [ ] Basket → nest → counters go up, the fire reacts
-- [ ] It feels good to do for 20 minutes (tested by me + 2–3 friends)
+## Definition of done — Prototype 2
+- [ ] I can sprint and crouch, and the center dot tells me when the pile is in scoop reach
+- [ ] Embers in the sieve only glimmer until I shake the ash out
+- [ ] I can switch between sieve and basket, place the basket on the ground, pour into it, pick it up
+      full, and feed the nest from either tool
+- [ ] The new loop feels good for 20 minutes (tested by me + 2–3 friends)

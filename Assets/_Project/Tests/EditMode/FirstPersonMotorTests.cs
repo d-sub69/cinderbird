@@ -24,7 +24,61 @@ namespace Cinderbird.Tests.EditMode
                 jumpHeight: JumpHeight,
                 gravity: Gravity,
                 coyoteTime: CoyoteTime,
-                jumpBufferTime: JumpBufferTime));
+                jumpBufferTime: JumpBufferTime,
+                sprintMultiplier: SprintMultiplier,
+                crouchMultiplier: CrouchMultiplier));
+        }
+
+        private const float SprintMultiplier = 1.6f;
+        private const float CrouchMultiplier = 0.5f;
+
+        private static float SettledHorizontalSpeed(FirstPersonMotor motor)
+        {
+            for (int i = 0; i < 200; i++)
+            {
+                motor.Tick(Vector3.forward, true, Dt);
+            }
+
+            return new Vector3(motor.Velocity.x, 0f, motor.Velocity.z).magnitude;
+        }
+
+        [Test]
+        public void Sprinting_ReachesSprintSpeed()
+        {
+            FirstPersonMotor motor = CreateMotor();
+            motor.SetStance(sprinting: true, crouching: false);
+
+            Assert.That(SettledHorizontalSpeed(motor), Is.EqualTo(WalkSpeed * SprintMultiplier).Within(1e-4f));
+        }
+
+        [Test]
+        public void Crouching_ReachesCrouchSpeed()
+        {
+            FirstPersonMotor motor = CreateMotor();
+            motor.SetStance(sprinting: false, crouching: true);
+
+            Assert.That(SettledHorizontalSpeed(motor), Is.EqualTo(WalkSpeed * CrouchMultiplier).Within(1e-4f));
+        }
+
+        [Test]
+        public void CrouchingWhileSprinting_UsesCrouchSpeed()
+        {
+            FirstPersonMotor motor = CreateMotor();
+            motor.SetStance(sprinting: true, crouching: true);
+
+            Assert.That(SettledHorizontalSpeed(motor), Is.EqualTo(WalkSpeed * CrouchMultiplier).Within(1e-4f));
+        }
+
+        [Test]
+        public void Jump_WhileCrouching_DoesNothing()
+        {
+            FirstPersonMotor motor = CreateMotor();
+            motor.SetStance(sprinting: false, crouching: true);
+            motor.RequestJump();
+
+            Vector3 velocity = motor.Tick(Vector3.zero, true, Dt);
+
+            Assert.That(velocity.y, Is.LessThanOrEqualTo(0f));
         }
 
         private static void TickAirborne(FirstPersonMotor motor, float seconds)

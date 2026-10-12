@@ -9,6 +9,16 @@ namespace Cinderbird.Player
         [SerializeField, Min(0f)] private float _walkSpeed = 4f;
         [SerializeField, Min(0f)] private float _groundAcceleration = 40f;
         [SerializeField, Min(0f)] private float _airAcceleration = 10f;
+        [Tooltip("Speed while holding Sprint, as a multiple of walk speed.")]
+        [SerializeField, Min(1f)] private float _sprintMultiplier = 1.6f;
+
+        [Header("Crouch")]
+        [Tooltip("Speed while crouched, as a multiple of walk speed.")]
+        [SerializeField, Range(0.1f, 1f)] private float _crouchMultiplier = 0.5f;
+        [Tooltip("Capsule height in meters while fully crouched (standing height comes from the CharacterController).")]
+        [SerializeField, Min(0.2f)] private float _crouchHeight = 1f;
+        [Tooltip("Meters of height change per second when crouching or standing up.")]
+        [SerializeField, Min(0.1f)] private float _crouchTransitionSpeed = 5f;
 
         [Header("Jump")]
         [SerializeField, Min(0f)] private float _jumpHeight = 1f;
@@ -25,6 +35,8 @@ namespace Cinderbird.Player
 
         public float LookSensitivity => _lookSensitivity;
         public float MaxPitch => _maxPitch;
+        public float CrouchHeight => _crouchHeight;
+        public float CrouchTransitionSpeed => _crouchTransitionSpeed;
 
         public MotorConfig ToMotorConfig()
         {
@@ -35,7 +47,9 @@ namespace Cinderbird.Player
                 _jumpHeight,
                 _gravity,
                 _coyoteTime,
-                _jumpBufferTime);
+                _jumpBufferTime,
+                _sprintMultiplier,
+                _crouchMultiplier);
         }
     }
 }
