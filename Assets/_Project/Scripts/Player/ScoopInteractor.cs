@@ -15,6 +15,8 @@ namespace Cinderbird.Player
         [SerializeField] private ScoopSettings _settings;
         [SerializeField] private Transform _camera;
         [SerializeField] private Sieve _sieve;
+        [Tooltip("Optional: pours the scooped ash into the sieve over a moment instead of instantly.")]
+        [SerializeField] private SieveFiller _filler;
         [SerializeField] private InputActionReference _scoopAction;
         [Tooltip("Layers the scoop ray can hit.")]
         [SerializeField] private LayerMask _hitMask = ~0;
@@ -22,6 +24,7 @@ namespace Cinderbird.Player
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
         private VoxelChunk _targetChunk;
         private Vector3 _targetCenter;
+        private Vector3 _targetSurfacePoint;
 
         /// <summary>True when the view ray hits diggable ash within reach this frame.</summary>
         public bool HasTarget => _targetChunk != null;
@@ -83,6 +86,7 @@ namespace Cinderbird.Player
             if (hit.collider.TryGetComponent(out VoxelChunk chunk))
             {
                 _targetChunk = chunk;
+                _targetSurfacePoint = hit.point;
                 // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
                 _targetCenter = hit.point + ray.direction * (_settings.Radius * _settings.Penetration);
             }
@@ -91,7 +95,8 @@ namespace Cinderbird.Player
         private void TryScoop()
         {
             // Checked before digging so a refused scoop doesn't destroy ash or embers.
-            if (_targetChunk == null || !_sieve.Contents.CanScoop)
+            bool pouring = _filler != null && _filler.IsFilling;
+            if (_targetChunk == null || !_sieve.Contents.CanScoop || pouring)
             {
                 return;
             }
@@ -100,6 +105,13 @@ namespace Cinderbird.Player
             DigResult result = _targetChunk.Dig(_targetCenter, _settings.Radius, _extractedEmbers);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
+                return;
+            }
+
+            // The filler copies the embers, so the list can be reused for the next dig.
+            if (_filler != null && _filler.isActiveAndEnabled)
+            {
+                _filler.TryBegin(result.RemovedVolume, _extractedEmbers, _targetSurfacePoint);
                 return;
             }
 

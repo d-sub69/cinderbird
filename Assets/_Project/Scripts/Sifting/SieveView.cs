@@ -31,6 +31,9 @@ namespace Cinderbird.Sifting
         [Tooltip("Small sphere with an emissive URP Lit material and no collider.")]
         [SerializeField] private Renderer _emberPrefab;
 
+        [Tooltip("Optional: draws the ash rising while a scooped load is still pouring in.")]
+        [SerializeField] private SieveFiller _filler;
+
         [Header("Buried glimmer")]
         [SerializeField] private GlimmerSettings _glimmerSettings;
         [Tooltip("Dot shown on the ash surface above a buried ember (Ember_Visual works).")]
@@ -74,6 +77,11 @@ namespace Cinderbird.Sifting
             }
 
             _sieve.Contents.Changed += Refresh;
+            if (_filler != null)
+            {
+                _filler.IncomingChanged += Refresh;
+            }
+
             Refresh();
         }
 
@@ -85,6 +93,10 @@ namespace Cinderbird.Sifting
             }
 
             _sieve.Contents.Changed -= Refresh;
+            if (_filler != null)
+            {
+                _filler.IncomingChanged -= Refresh;
+            }
         }
 
         private void Update()
@@ -132,16 +144,27 @@ namespace Cinderbird.Sifting
             UpdateGlimmers(contents.Embers, ashHeight);
         }
 
-        // Each load starts deep enough to bury every ember, then drains in step with the ash still left.
+        // Each load fills up to a height deep enough to bury every ember, then drains in step with the ash left.
+        // While a load is still pouring in, it rises toward that same height, so the hand-over is seamless.
         private float AshHeight(SieveContents contents)
         {
-            if (contents.AshVolume <= 0f)
+            if (contents.AshVolume > 0f)
             {
-                return 0f;
+                return LoadHeight(contents.LoadVolume) * contents.AshFraction;
             }
 
-            float loadHeight = _settings.FullAshHeight * Mathf.Clamp01(contents.LoadVolume / _settings.ReferenceAshVolume);
-            return Mathf.Max(loadHeight, _minCoverHeight) * contents.AshFraction;
+            if (_filler != null && _filler.IsFilling)
+            {
+                return LoadHeight(_filler.IncomingVolume) * _filler.IncomingProgress;
+            }
+
+            return 0f;
+        }
+
+        private float LoadHeight(float loadVolume)
+        {
+            float height = _settings.FullAshHeight * Mathf.Clamp01(loadVolume / _settings.ReferenceAshVolume);
+            return Mathf.Max(height, _minCoverHeight);
         }
 
         private void UpdateGlimmers(IReadOnlyList<Ember> embers, float ashHeight)

@@ -18,6 +18,26 @@ namespace Cinderbird.Sifting
         [Tooltip("Ash volume (m³) drawn at full height. Visual only; it does not limit scooping.")]
         [SerializeField, Min(0.001f)] private float _referenceAshVolume = 0.2f;
 
+        [Header("Filling (ash pouring in from the pile)")]
+        [Tooltip("Seconds from the click to the load fully in the sieve.")]
+        [SerializeField, Min(0f)] private float _fillDuration = 0.45f;
+        [Tooltip("Flying ash clumps per liter scooped (at least a few, at most Max Clumps).")]
+        [SerializeField, Min(0f)] private float _clumpsPerLiter = 0.1f;
+        [SerializeField, Min(1)] private int _maxClumps = 24;
+        [Tooltip("Peak height of each clump's arc above the straight line, in meters.")]
+        [SerializeField, Min(0f)] private float _clumpArcHeight = 0.35f;
+        [Tooltip("Diameter of a clump in meters.")]
+        [SerializeField, Min(0.005f)] private float _clumpSize = 0.05f;
+        [Tooltip("Dust particles puffed up at the dig spot.")]
+        [SerializeField, Min(0)] private int _digPuffParticles = 25;
+
+        public float FillDuration => _fillDuration;
+        public float ClumpsPerLiter => _clumpsPerLiter;
+        public int MaxClumps => _maxClumps;
+        public float ClumpArcHeight => _clumpArcHeight;
+        public float ClumpSize => _clumpSize;
+        public int DigPuffParticles => _digPuffParticles;
+
         public int MaxVisibleEmbers => _maxVisibleEmbers;
         public float Radius => _radius;
         public float SpotJitter => _spotJitter;
