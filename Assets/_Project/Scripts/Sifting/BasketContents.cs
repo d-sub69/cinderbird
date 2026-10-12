@@ -1,0 +1,53 @@
+using System;
+using System.Collections.Generic;
+using Cinderbird.Embers;
+
+namespace Cinderbird.Sifting
+{
+    /// <summary>
+    /// Embers carried in the basket on the way to the nest. Holds a limited number, so full baskets
+    /// force a trip.
+    /// </summary>
+    public sealed class BasketContents
+    {
+        private readonly List<Ember> _embers;
+
+        public BasketContents(int capacity)
+        {
+            if (capacity < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(capacity), "Basket must hold at least one ember.");
+            }
+
+            Capacity = capacity;
+            _embers = new List<Ember>(capacity);
+        }
+
+        public event Action Changed;
+
+        public int Capacity { get; }
+
+        public IReadOnlyList<Ember> Embers => _embers;
+
+        public int FreeSpace => Capacity - _embers.Count;
+
+        public bool IsFull => FreeSpace == 0;
+
+        /// <exception cref="InvalidOperationException">When the embers don't fit; check <see cref="FreeSpace"/> first.</exception>
+        public void Add(List<Ember> embers)
+        {
+            if (embers.Count > FreeSpace)
+            {
+                throw new InvalidOperationException($"Basket has room for {FreeSpace} embers, not {embers.Count}.");
+            }
+
+            if (embers.Count == 0)
+            {
+                return;
+            }
+
+            _embers.AddRange(embers);
+            Changed?.Invoke();
+        }
+    }
+}

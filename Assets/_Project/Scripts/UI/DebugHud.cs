@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using Cinderbird.Embers;
 using Cinderbird.Sifting;
@@ -8,17 +9,21 @@ using UnityEngine;
 namespace Cinderbird.UI
 {
     /// <summary>
-    /// Prototype read-out of the sieve, shake and pile. Marks itself dirty on changes and rebuilds
-    /// its text at most a few times per second, because the ash level changes every frame while shaking.
+    /// Prototype read-out of the sieve, shake, basket and pile, plus short feedback messages.
+    /// Marks itself dirty on changes and rebuilds its text at most a few times per second, because
+    /// the ash level changes every frame while shaking.
     /// </summary>
     public sealed class DebugHud : MonoBehaviour
     {
-        // Debug display cadence, not game balance, so it lives here rather than in a settings asset.
+        // Debug display timing, not game balance, so these live here rather than in a settings asset.
         private const float RefreshInterval = 0.1f;
+        private const float MessageDuration = 2f;
 
         [SerializeField] private TMP_Text _text;
         [SerializeField] private Sieve _sieve;
         [SerializeField] private SieveShakeController _shakeController;
+        [SerializeField] private SieveTipController _tipController;
+        [SerializeField] private Basket _basket;
         [SerializeField] private VoxelChunk _pile;
         [SerializeField] private EmberTierCatalog _tierCatalog;
 
@@ -28,10 +33,13 @@ namespace Cinderbird.UI
         private float _nextRefreshTime;
         private float _shownEnergy = -1f;
         private float _pileVolume;
+        private string _message;
+        private float _messageEndTime;
 
         private void Awake()
         {
-            if (_text == null || _sieve == null || _shakeController == null || _pile == null || _tierCatalog == null)
+            if (_text == null || _sieve == null || _shakeController == null || _tipController == null ||
+                _basket == null || _pile == null || _tierCatalog == null)
             {
                 Debug.LogError($"{nameof(DebugHud)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -49,7 +57,10 @@ namespace Cinderbird.UI
             }
 
             _sieve.Contents.Changed += MarkDirty;
+            _basket.Contents.Changed += MarkDirty;
             _pile.Dug += OnDug;
+            _tipController.Tipped += OnTipped;
+            _tipController.TipRefused += OnTipRefused;
         }
 
         // Start rather than OnEnable: the pile builds its grid in Awake, which may run after ours.
@@ -67,13 +78,22 @@ namespace Cinderbird.UI
             }
 
             _sieve.Contents.Changed -= MarkDirty;
+            _basket.Contents.Changed -= MarkDirty;
             _pile.Dug -= OnDug;
+            _tipController.Tipped -= OnTipped;
+            _tipController.TipRefused -= OnTipRefused;
         }
 
         private void Update()
         {
             if (!Mathf.Approximately(_shakeController.Energy, _shownEnergy))
             {
+                _dirty = true;
+            }
+
+            if (_message != null && Time.unscaledTime >= _messageEndTime)
+            {
+                _message = null;
                 _dirty = true;
             }
 
@@ -97,25 +117,90 @@ namespace Cinderbird.UI
             _dirty = true;
         }
 
+        private void OnTipped(int moved)
+        {
+            int left = _sieve.Contents.Embers.Count;
+            if (left > 0)
+            {
+                ShowMessage($"Basket full: {left} ember{(left == 1 ? "" : "s")} left in the sieve");
+            }
+        }
+
+        private void OnTipRefused(TipOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case TipOutcome.AshRemaining:
+                    ShowMessage("Shake out the ash first");
+                    break;
+                case TipOutcome.NoEmbers:
+                    ShowMessage("No embers in the sieve");
+                    break;
+                case TipOutcome.BasketFull:
+                    ShowMessage("Basket is full: take it to the nest");
+                    break;
+            }
+        }
+
+        private void ShowMessage(string message)
+        {
+            _message = message;
+            _messageEndTime = Time.unscaledTime + MessageDuration;
+            _dirty = true;
+            // Feedback should appear on the press, not up to one refresh interval later.
+            _nextRefreshTime = 0f;
+        }
+
         private void Refresh()
         {
             _dirty = false;
             _nextRefreshTime = Time.unscaledTime + RefreshInterval;
             _shownEnergy = _shakeController.Energy;
 
-            SieveContents contents = _sieve.Contents;
-            CountTiers(contents);
-
+            SieveContents sieve = _sieve.Contents;
+            BasketContents basket = _basket.Contents;
             _builder.Clear();
-            _builder.Append("Sieve: ").Append((contents.AshVolume * 1000f).ToString("F0")).Append(" L ash");
-            _builder.Append(contents.CanScoop ? "" : "  (shake before scooping)");
+
+            _builder.Append("Sieve: ").Append((sieve.AshVolume * 1000f).ToString("F0")).Append(" L ash");
+            _builder.Append(sieve.CanScoop ? "" : "  (shake before scooping)");
             if (_shownEnergy > 0f)
             {
                 _builder.Append("  Shaking ").Append(Mathf.RoundToInt(_shownEnergy * 100f)).Append('%');
             }
 
             _builder.AppendLine();
-            _builder.Append("Embers in sieve: ").Append(contents.Embers.Count);
+            _builder.Append("Embers in sieve: ").Append(sieve.Embers.Count);
+            AppendTierBreakdown(sieve.Embers);
+            _builder.AppendLine();
+
+            _builder.Append("Basket: ").Append(basket.Embers.Count).Append('/').Append(basket.Capacity)
+                .Append(" embers (Glow ").Append(TotalGlow(basket.Embers)).Append(')');
+            AppendTierBreakdown(basket.Embers);
+            _builder.AppendLine();
+
+            _builder.Append("Pile: ").Append(_pileVolume.ToString("F2")).Append(" m³, ")
+                .Append(_pile.BuriedEmberCount).Append(" embers buried");
+
+            if (_message != null)
+            {
+                _builder.AppendLine().AppendLine().Append(_message);
+            }
+
+            _text.SetText(_builder);
+        }
+
+        private void AppendTierBreakdown(IReadOnlyList<Ember> embers)
+        {
+            System.Array.Clear(_tierCounts, 0, _tierCounts.Length);
+            for (int i = 0; i < embers.Count; i++)
+            {
+                int tier = embers[i].TierIndex;
+                if (tier >= 0 && tier < _tierCounts.Length)
+                {
+                    _tierCounts[tier]++;
+                }
+            }
+
             for (int i = 0; i < _tierCounts.Length; i++)
             {
                 if (_tierCounts[i] > 0 && _tierCatalog[i] != null)
@@ -123,25 +208,21 @@ namespace Cinderbird.UI
                     _builder.Append("  ").Append(_tierCatalog[i].DisplayName).Append(' ').Append(_tierCounts[i]);
                 }
             }
-
-            _builder.AppendLine();
-            _builder.Append("Pile: ").Append(_pileVolume.ToString("F2")).Append(" m³, ")
-                .Append(_pile.BuriedEmberCount).Append(" embers buried");
-
-            _text.SetText(_builder);
         }
 
-        private void CountTiers(SieveContents contents)
+        private int TotalGlow(IReadOnlyList<Ember> embers)
         {
-            System.Array.Clear(_tierCounts, 0, _tierCounts.Length);
-            for (int i = 0; i < contents.Embers.Count; i++)
+            int glow = 0;
+            for (int i = 0; i < embers.Count; i++)
             {
-                int tier = contents.Embers[i].TierIndex;
-                if (tier >= 0 && tier < _tierCounts.Length)
+                int tier = embers[i].TierIndex;
+                if (tier >= 0 && tier < _tierCatalog.Count && _tierCatalog[tier] != null)
                 {
-                    _tierCounts[tier]++;
+                    glow += _tierCatalog[tier].GlowValue;
                 }
             }
+
+            return glow;
         }
     }
 }

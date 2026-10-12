@@ -41,6 +41,31 @@ namespace Cinderbird.Sifting
             return true;
         }
 
+        /// <summary>
+        /// Moves up to <paramref name="count"/> of the most recently added embers into <paramref name="output"/>
+        /// (appended, oldest of them first). Taking from the end keeps the remaining embers at the same
+        /// indices, which the views rely on to keep each ember in its spot.
+        /// </summary>
+        /// <returns>How many embers were taken.</returns>
+        public int TakeNewestEmbers(int count, List<Ember> output)
+        {
+            int taken = Math.Min(Math.Max(0, count), _embers.Count);
+            if (taken == 0)
+            {
+                return 0;
+            }
+
+            int start = _embers.Count - taken;
+            for (int i = start; i < _embers.Count; i++)
+            {
+                output.Add(_embers[i]);
+            }
+
+            _embers.RemoveRange(start, taken);
+            Changed?.Invoke();
+            return taken;
+        }
+
         /// <returns>The ash actually removed, which is less than asked if the sieve runs out.</returns>
         public float RemoveAsh(float volume)
         {

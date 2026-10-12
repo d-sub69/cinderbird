@@ -55,6 +55,16 @@
                     "interactions": "",
                     "initialStateCheck": false,
                     "priority": 0
+                },
+                {
+                    "name": "Tip",
+                    "type": "Button",
+                    "id": "63bd3412-0111-4339-9549-f07f16abfae3",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
                 }
             ],
             "bindings": [
@@ -330,6 +340,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "Shake",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "64d6bee7-4b26-4fbe-b378-4cd324c26842",
+                    "path": "<Keyboard>/q",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Tip",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
