@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cinderbird.Embers;
 using UnityEngine;
 
@@ -5,10 +6,20 @@ namespace Cinderbird.Sifting
 {
     /// <summary>
     /// Owns the basket's <see cref="BasketContents"/> so other components can reach it through the Inspector.
+    /// Also a pour target: while it stands on the ground its trigger is on, so the sieve can be poured into it.
     /// </summary>
-    public sealed class Basket : MonoBehaviour, IEmberHolder
+    public sealed class Basket : MonoBehaviour, IEmberHolder, IPourTarget
     {
         public IEmberSource Source => Contents;
+
+        public string DisplayName => "the basket";
+
+        public IEmberSink Sink => Contents;
+
+        // The basket view already animates new embers dropping in when the contents change.
+        public void OnPoured(IReadOnlyList<Ember> embers, Vector3 fromPosition)
+        {
+        }
 
         [SerializeField] private BasketSettings _settings;
 

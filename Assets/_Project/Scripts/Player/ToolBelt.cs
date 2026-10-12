@@ -64,6 +64,24 @@ namespace Cinderbird.Player
             }
         }
 
+        /// <summary>Takes a tool out of the inventory, e.g. when it's set down in the world.</summary>
+        public bool TryRelease(ToolDefinition tool)
+        {
+            return Inventory.Remove(tool);
+        }
+
+        /// <summary>Puts a tool back into the first free slot and makes it the tool in hand.</summary>
+        public bool TryTakeBack(ToolDefinition tool)
+        {
+            if (!Inventory.TryAdd(tool, out int slot))
+            {
+                return false;
+            }
+
+            Inventory.Select(slot);
+            return true;
+        }
+
         private void Awake()
         {
             if (_settings == null || _hands == null || _tools == null || _tools.Length == 0)
@@ -236,10 +254,13 @@ namespace Cinderbird.Player
             _shownTool = tool;
             foreach (HeldToolBinding binding in _tools)
             {
-                if (binding.HeldObject != null)
+                // A tool that isn't in the inventory is out in the world (placed); leave it alone.
+                if (binding.HeldObject == null || Inventory.IndexOf(binding.Tool) < 0)
                 {
-                    binding.HeldObject.SetActive(binding.Tool == tool && tool != null);
+                    continue;
                 }
+
+                binding.HeldObject.SetActive(binding.Tool == tool && tool != null);
             }
         }
 

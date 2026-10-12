@@ -28,6 +28,7 @@ namespace Cinderbird.UI
         [SerializeField] private PourController _pourController;
         [SerializeField] private PlayerInteractor _interactor;
         [SerializeField] private ToolBelt _toolBelt;
+        [SerializeField] private ToolPlacementController _placement;
         [SerializeField] private Basket _basket;
         [SerializeField] private Wallet _wallet;
         [SerializeField] private NestController _nest;
@@ -46,7 +47,7 @@ namespace Cinderbird.UI
         private void Awake()
         {
             if (_text == null || _sieve == null || _shakeController == null || _pourController == null || _interactor == null ||
-                _toolBelt == null || _basket == null || _wallet == null || _nest == null || _pile == null || _tierCatalog == null)
+                _toolBelt == null || _placement == null || _basket == null || _wallet == null || _nest == null || _pile == null || _tierCatalog == null)
             {
                 Debug.LogError($"{nameof(DebugHud)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -68,6 +69,8 @@ namespace Cinderbird.UI
             _wallet.Currencies.Changed += MarkDirty;
             _interactor.TargetChanged += OnPromptChanged;
             _toolBelt.Inventory.Changed += OnPromptChanged;
+            _placement.StateChanged += OnPromptChanged;
+            _placement.PickUpRefused += OnPickUpRefused;
             _pile.Dug += OnDug;
             _pourController.Poured += OnPoured;
             _pourController.PourRefused += OnPourRefused;
@@ -92,6 +95,8 @@ namespace Cinderbird.UI
             _wallet.Currencies.Changed -= MarkDirty;
             _interactor.TargetChanged -= OnPromptChanged;
             _toolBelt.Inventory.Changed -= OnPromptChanged;
+            _placement.StateChanged -= OnPromptChanged;
+            _placement.PickUpRefused -= OnPickUpRefused;
             _pile.Dug -= OnDug;
             _pourController.Poured -= OnPoured;
             _pourController.PourRefused -= OnPourRefused;
@@ -135,6 +140,11 @@ namespace Cinderbird.UI
             _dirty = true;
             // The prompt should appear as you look at something, not up to one refresh interval later.
             _nextRefreshTime = 0f;
+        }
+
+        private void OnPickUpRefused(PlaceableTool tool)
+        {
+            ShowMessage($"No free slot for the {tool.Tool.DisplayName.ToLowerInvariant()}");
         }
 
         private void OnPoured(ToolDefinition tool, IPourTarget target, int moved)
@@ -222,6 +232,8 @@ namespace Cinderbird.UI
                 .Append(" (").Append(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
 
             AppendPourPrompt();
+            AppendPickUpPrompt();
+            AppendPlacementPrompt();
 
             if (_message != null)
             {
@@ -250,6 +262,49 @@ namespace Cinderbird.UI
             _builder.Append("Q: pour the ").Append(tool.DisplayName.ToLowerInvariant())
                 .Append(" into ").Append(target.DisplayName)
                 .Append(" (").Append(_toolBelt.ActiveSource.EmberCount).Append(" embers)");
+        }
+
+        private void AppendPickUpPrompt()
+        {
+            PlaceableTool tool = _interactor.PickUpTarget;
+            if (tool == null)
+            {
+                return;
+            }
+
+            _builder.AppendLine().Append("E: pick up the ").Append(tool.Tool.DisplayName.ToLowerInvariant());
+            IEmberHolder holder = tool.GetComponent<IEmberHolder>();
+            if (holder != null)
+            {
+                _builder.Append(" (").Append(holder.Source.EmberCount).Append(" embers)");
+            }
+        }
+
+        private void AppendPlacementPrompt()
+        {
+            PlaceableTool tool = _placement.Placing;
+            if (tool == null || _placement.Placement == PlacementResult.NoSurface)
+            {
+                return;
+            }
+
+            string toolName = tool.Tool.DisplayName.ToLowerInvariant();
+            _builder.AppendLine().AppendLine();
+            switch (_placement.Placement)
+            {
+                case PlacementResult.Valid:
+                    _builder.Append("G: place the ").Append(toolName);
+                    break;
+                case PlacementResult.OnAsh:
+                    _builder.Append("Can't place the ").Append(toolName).Append(" on the ash pile");
+                    break;
+                case PlacementResult.TooSteep:
+                    _builder.Append("Too steep to place the ").Append(toolName);
+                    break;
+                case PlacementResult.Blocked:
+                    _builder.Append("Not enough room for the ").Append(toolName);
+                    break;
+            }
         }
 
         private void AppendTierBreakdown(IReadOnlyList<Ember> embers)

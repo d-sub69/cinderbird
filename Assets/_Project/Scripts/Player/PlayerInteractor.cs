@@ -5,8 +5,8 @@ using UnityEngine;
 namespace Cinderbird.Player
 {
     /// <summary>
-    /// The look-to-interact raycast: finds what the player is looking at within reach (the nest now, a placed
-    /// basket in step C2) so actions and prompts can use it.
+    /// The look-to-interact raycast: finds what the player is looking at within reach (the nest, a placed
+    /// basket) so actions, prompts and the center dot can use it.
     /// </summary>
     public sealed class PlayerInteractor : MonoBehaviour
     {
@@ -17,6 +17,12 @@ namespace Cinderbird.Player
 
         /// <summary>What the player could pour into right now, or null.</summary>
         public IPourTarget PourTarget { get; private set; }
+
+        /// <summary>A placed tool the player could pick up right now, or null.</summary>
+        public PlaceableTool PickUpTarget { get; private set; }
+
+        /// <summary>The object behind the current target (for looks such as the center dot's accent), or null.</summary>
+        public GameObject TargetObject { get; private set; }
 
         public event Action TargetChanged;
 
@@ -31,20 +37,35 @@ namespace Cinderbird.Player
 
         private void Update()
         {
-            IPourTarget found = null;
+            IPourTarget pourTarget = null;
+            PlaceableTool pickUpTarget = null;
+            GameObject targetObject = null;
+
             Ray ray = new Ray(_camera.position, _camera.forward);
             // Triggers count: interactables use trigger volumes so they can be bigger than their solid parts.
             if (Physics.Raycast(ray, out RaycastHit hit, _settings.InteractReach, _hitMask, QueryTriggerInteraction.Collide))
             {
-                found = hit.collider.GetComponentInParent<IPourTarget>();
+                pourTarget = hit.collider.GetComponentInParent<IPourTarget>();
+                pickUpTarget = hit.collider.GetComponentInParent<PlaceableTool>();
+                if (pickUpTarget != null && !pickUpTarget.IsPlaced)
+                {
+                    pickUpTarget = null;
+                }
+
+                if (pourTarget != null || pickUpTarget != null)
+                {
+                    targetObject = hit.collider.gameObject;
+                }
             }
 
-            if (ReferenceEquals(found, PourTarget))
+            if (ReferenceEquals(pourTarget, PourTarget) && pickUpTarget == PickUpTarget && targetObject == TargetObject)
             {
                 return;
             }
 
-            PourTarget = found;
+            PourTarget = pourTarget;
+            PickUpTarget = pickUpTarget;
+            TargetObject = targetObject;
             TargetChanged?.Invoke();
         }
     }

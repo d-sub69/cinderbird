@@ -31,6 +31,8 @@ namespace Cinderbird.Player
 
         public T this[int slot] => _slots[slot];
 
+        public bool HasFreeSlot => Array.IndexOf(_slots, null) >= 0;
+
         /// <summary>Puts the item into the first empty slot.</summary>
         /// <returns>False if it's already inside or every slot is taken.</returns>
         public bool TryAdd(T item, out int slot)

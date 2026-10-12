@@ -18,7 +18,15 @@ namespace Cinderbird.Player
         [Tooltip("How far you can look at something (nest, placed basket) and still use it, in meters.")]
         [SerializeField, Min(0.1f)] private float _interactReach = 3f;
 
+        [Header("Placing tools")]
+        [Tooltip("Steepest ground, in degrees, a tool (the basket) can be set down on.")]
+        [SerializeField, Range(0f, 89f)] private float _maxPlaceSlope = 30f;
+        [Tooltip("Radius in meters that must be free of obstacles around a placed tool.")]
+        [SerializeField, Min(0.01f)] private float _placeClearance = 0.18f;
+
         public int Capacity => _capacity;
+        public float MaxPlaceSlope => _maxPlaceSlope;
+        public float PlaceClearance => _placeClearance;
         public float SwapDuration => _swapDuration;
         public float LowerDistance => _lowerDistance;
         public float InteractReach => _interactReach;

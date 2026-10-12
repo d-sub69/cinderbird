@@ -145,6 +145,33 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void HasFreeSlot_TracksAddAndRemove()
+        {
+            Inventory<string> inventory = WithItems(2, "sieve");
+            Assert.That(inventory.HasFreeSlot, Is.True);
+
+            inventory.TryAdd("basket", out _);
+            Assert.That(inventory.HasFreeSlot, Is.False);
+
+            inventory.Remove("basket");
+            Assert.That(inventory.HasFreeSlot, Is.True);
+        }
+
+        [Test]
+        public void PlaceAndPickUp_ReturnsToTheFreedSlot()
+        {
+            Inventory<string> inventory = WithItems(5, "sieve", "basket");
+            inventory.Select(1);
+
+            inventory.Remove("basket");
+            inventory.TryAdd("basket", out int slot);
+            inventory.Select(slot);
+
+            Assert.That(slot, Is.EqualTo(1));
+            Assert.That(inventory.Active, Is.EqualTo("basket"));
+        }
+
+        [Test]
         public void Changed_FiresOnAddRemoveAndSelect_NotOnNoOps()
         {
             Inventory<string> inventory = new Inventory<string>(3);
