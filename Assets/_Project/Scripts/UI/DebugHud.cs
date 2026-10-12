@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Text;
+using Cinderbird.Economy;
 using Cinderbird.Embers;
+using Cinderbird.Nest;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
 using TMPro;
@@ -24,6 +26,8 @@ namespace Cinderbird.UI
         [SerializeField] private SieveShakeController _shakeController;
         [SerializeField] private SieveTipController _tipController;
         [SerializeField] private Basket _basket;
+        [SerializeField] private Wallet _wallet;
+        [SerializeField] private NestController _nest;
         [SerializeField] private VoxelChunk _pile;
         [SerializeField] private EmberTierCatalog _tierCatalog;
 
@@ -39,7 +43,7 @@ namespace Cinderbird.UI
         private void Awake()
         {
             if (_text == null || _sieve == null || _shakeController == null || _tipController == null ||
-                _basket == null || _pile == null || _tierCatalog == null)
+                _basket == null || _wallet == null || _nest == null || _pile == null || _tierCatalog == null)
             {
                 Debug.LogError($"{nameof(DebugHud)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -58,6 +62,8 @@ namespace Cinderbird.UI
 
             _sieve.Contents.Changed += MarkDirty;
             _basket.Contents.Changed += MarkDirty;
+            _wallet.Currencies.Changed += MarkDirty;
+            _nest.InRangeChanged += OnNestRangeChanged;
             _pile.Dug += OnDug;
             _tipController.Tipped += OnTipped;
             _tipController.TipRefused += OnTipRefused;
@@ -79,6 +85,8 @@ namespace Cinderbird.UI
 
             _sieve.Contents.Changed -= MarkDirty;
             _basket.Contents.Changed -= MarkDirty;
+            _wallet.Currencies.Changed -= MarkDirty;
+            _nest.InRangeChanged -= OnNestRangeChanged;
             _pile.Dug -= OnDug;
             _tipController.Tipped -= OnTipped;
             _tipController.TipRefused -= OnTipRefused;
@@ -115,6 +123,13 @@ namespace Cinderbird.UI
             // Cached here: the total walks the whole grid, too slow to repeat on every HUD refresh.
             _pileVolume = _pile.TotalAshVolume;
             _dirty = true;
+        }
+
+        private void OnNestRangeChanged(bool inRange)
+        {
+            _dirty = true;
+            // The prompt should appear as you step in, not up to one refresh interval later.
+            _nextRefreshTime = 0f;
         }
 
         private void OnTipped(int moved)
@@ -180,6 +195,26 @@ namespace Cinderbird.UI
 
             _builder.Append("Pile: ").Append(_pileVolume.ToString("F2")).Append(" m³, ")
                 .Append(_pile.BuriedEmberCount).Append(" embers buried");
+            _builder.AppendLine();
+
+            Currencies currencies = _wallet.Currencies;
+            _builder.Append("Glow ").Append(currencies.Glow)
+                .Append("   Heat ").Append(currencies.Heat).Append(" / ").Append(_nest.HeatGoal)
+                .Append(" (").Append(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
+
+            if (_nest.InRange)
+            {
+                _builder.AppendLine().AppendLine();
+                int carried = basket.Embers.Count;
+                if (carried > 0)
+                {
+                    _builder.Append("Press E to feed the nest (").Append(carried).Append(carried == 1 ? " ember)" : " embers)");
+                }
+                else
+                {
+                    _builder.Append("The nest is hungry: bring embers in your basket");
+                }
+            }
 
             if (_message != null)
             {

@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 618c515fd3bd9a345a7b75f3f5685830, type: 3}
+  m_Name: NestSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Nest.NestSettings
+  _pourRadius: 2.5
+  _flarePerHeat: 0.15
+  _flareHalfLife: 0.4
+  _maxFlare: 1.5
+  _minEmissionRate: 8
+  _maxEmissionRate: 60
+  _flareEmissionBoost: 80
+  _minSizeMultiplier: 0.6
+  _maxSizeMultiplier: 1.6
+  _flareSizeBoost: 0.5
+  _minLightIntensity: 1
+  _maxLightIntensity: 5
+  _flareLightBoost: 4
+  _flightDuration: 0.6
+  _flightStagger: 0.06
+  _flightArcHeight: 0.8
+  _maxFlights: 30
+  _flightScale: 1.5

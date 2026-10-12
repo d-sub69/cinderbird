@@ -33,6 +33,22 @@ namespace Cinderbird.Sifting
 
         public bool IsFull => FreeSpace == 0;
 
+        /// <summary>Empties the basket into <paramref name="output"/> (appended).</summary>
+        /// <returns>How many embers were taken.</returns>
+        public int TakeAll(List<Ember> output)
+        {
+            int count = _embers.Count;
+            if (count == 0)
+            {
+                return 0;
+            }
+
+            output.AddRange(_embers);
+            _embers.Clear();
+            Changed?.Invoke();
+            return count;
+        }
+
         /// <exception cref="InvalidOperationException">When the embers don't fit; check <see cref="FreeSpace"/> first.</exception>
         public void Add(List<Ember> embers)
         {

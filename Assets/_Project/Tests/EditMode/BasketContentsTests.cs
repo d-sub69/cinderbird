@@ -59,6 +59,34 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void TakeAll_EmptiesBasketIntoOutput()
+        {
+            BasketContents basket = new BasketContents(5);
+            basket.Add(Embers(3));
+            List<Ember> output = new List<Ember>();
+
+            int taken = basket.TakeAll(output);
+
+            Assert.That(taken, Is.EqualTo(3));
+            Assert.That(output.Count, Is.EqualTo(3));
+            Assert.That(basket.Embers, Is.Empty);
+            Assert.That(basket.FreeSpace, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void TakeAll_EmptyBasket_TakesNothingAndRaisesNoChange()
+        {
+            BasketContents basket = new BasketContents(5);
+            int changes = 0;
+            basket.Changed += () => changes++;
+
+            int taken = basket.TakeAll(new List<Ember>());
+
+            Assert.That(taken, Is.Zero);
+            Assert.That(changes, Is.Zero);
+        }
+
+        [Test]
         public void Changed_FiresOnAdd_ButNotForEmptyAdd()
         {
             BasketContents basket = new BasketContents(5);

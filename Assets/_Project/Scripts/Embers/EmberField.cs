@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,13 +7,24 @@ namespace Cinderbird.Embers
     /// <summary>
     /// The embers still buried in one chunk. Order is not preserved: removal swaps with the last element.
     /// </summary>
-    public sealed class EmberField
+    public sealed class EmberField : IReadOnlyList<Ember>
     {
         private readonly List<Ember> _embers = new List<Ember>();
 
         public int Count => _embers.Count;
 
         public Ember this[int index] => _embers[index];
+
+        // Interface enumeration boxes the enumerator; hot paths should index with Count instead.
+        public IEnumerator<Ember> GetEnumerator()
+        {
+            return _embers.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
 
         public void Add(Ember ember)
         {
