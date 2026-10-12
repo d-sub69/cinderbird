@@ -22,6 +22,12 @@ namespace Cinderbird.Sifting
 
         public bool CanScoop => AshVolume <= 0f;
 
+        /// <summary>Ash volume of the current load when it was scooped; each scoop starts a new load.</summary>
+        public float LoadVolume { get; private set; }
+
+        /// <summary>Share of the current load still in the sieve: 1 right after scooping, 0 once shaken out.</summary>
+        public float AshFraction => LoadVolume > 0f ? AshVolume / LoadVolume : 0f;
+
         /// <returns>False (and nothing changes) when the sieve still holds ash.</returns>
         public bool TryAdd(float ashVolume, List<Ember> embers)
         {
@@ -36,6 +42,8 @@ namespace Cinderbird.Sifting
             }
 
             AshVolume += ashVolume;
+            // Scooping is only allowed into an ash-free sieve, so this ash is the whole new load.
+            LoadVolume = AshVolume;
             _embers.AddRange(embers);
             Changed?.Invoke();
             return true;

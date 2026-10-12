@@ -157,6 +157,35 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void AshFraction_TracksTheCurrentLoad()
+        {
+            SieveContents sieve = new SieveContents();
+            Assert.That(sieve.AshFraction, Is.Zero);
+
+            sieve.TryAdd(0.2f, Embers(0));
+            Assert.That(sieve.AshFraction, Is.EqualTo(1f));
+
+            sieve.RemoveAsh(0.05f);
+            Assert.That(sieve.AshFraction, Is.EqualTo(0.75f).Within(1e-5f));
+
+            sieve.RemoveAsh(1f);
+            Assert.That(sieve.AshFraction, Is.Zero);
+        }
+
+        [Test]
+        public void LoadVolume_ResetsWithEachScoop()
+        {
+            SieveContents sieve = new SieveContents();
+            sieve.TryAdd(0.2f, Embers(0));
+            sieve.RemoveAsh(1f);
+
+            sieve.TryAdd(0.05f, Embers(0));
+
+            Assert.That(sieve.LoadVolume, Is.EqualTo(0.05f));
+            Assert.That(sieve.AshFraction, Is.EqualTo(1f));
+        }
+
+        [Test]
         public void TryAdd_NegativeAsh_Throws()
         {
             SieveContents sieve = new SieveContents();

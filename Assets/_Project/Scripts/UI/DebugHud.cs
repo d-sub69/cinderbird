@@ -184,8 +184,17 @@ namespace Cinderbird.UI
             }
 
             _builder.AppendLine();
-            _builder.Append("Embers in sieve: ").Append(sieve.Embers.Count);
-            AppendTierBreakdown(sieve.Embers);
+            // While ash remains the contents are a secret; shaking is the reveal.
+            if (sieve.AshVolume > 0f)
+            {
+                _builder.Append("Embers in sieve: ? (shake to reveal)");
+            }
+            else
+            {
+                _builder.Append("Embers in sieve: ").Append(sieve.Embers.Count);
+                AppendTierBreakdown(sieve.Embers);
+            }
+
             _builder.AppendLine();
 
             _builder.Append("Basket: ").Append(basket.Embers.Count).Append('/').Append(basket.Capacity)

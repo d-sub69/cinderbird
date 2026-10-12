@@ -189,6 +189,8 @@ MonoBehaviour:
   _ashDisc: {fileID: 1110921962}
   _emberRoot: {fileID: 328885847}
   _emberPrefab: {fileID: 1927923755037332876, guid: 35d5e50dbd631f24eb284e514dccd886, type: 3}
+  _glimmerSettings: {fileID: 11400000, guid: d3f0f286c154ccc44879b958042954e9, type: 2}
+  _glimmerPrefab: {fileID: 1927923755037332876, guid: 35d5e50dbd631f24eb284e514dccd886, type: 3}
 --- !u!114 &3195223
 MonoBehaviour:
   m_ObjectHideFlags: 0

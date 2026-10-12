@@ -71,11 +71,10 @@ namespace Cinderbird.Embers
                 return;
             }
 
-            float time = Time.time * _settings.TwinkleSpeed * Mathf.PI * 2f;
+            float time = Time.time;
             for (int i = 0; i < _activeCount; i++)
             {
-                float wave = Mathf.Sin(time + _phases[i]) * 0.5f + 0.5f;
-                float dim = 1f - _settings.TwinkleAmount * wave;
+                float dim = GlimmerTwinkle.Dim(time, _phases[i], _settings.TwinkleSpeed, _settings.TwinkleAmount);
                 ApplyColor(i, _emissionColors[i] * dim);
             }
         }
@@ -99,8 +98,7 @@ namespace Cinderbird.Embers
                 visual.name = $"Glimmer {i}";
                 visual.gameObject.SetActive(false);
                 _visuals[i] = visual;
-                // Golden-angle spacing spreads phases evenly so dots don't twinkle in sync.
-                _phases[i] = i * 2.39996f;
+                _phases[i] = GlimmerTwinkle.PhaseFor(i);
             }
         }
 

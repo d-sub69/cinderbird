@@ -100,6 +100,31 @@ namespace Cinderbird.EditorTools
             return true;
         }
 
+        /// <summary>Finds the single project asset of a type (e.g. a settings asset under Data/).</summary>
+        public static T FindAsset<T>() where T : Object
+        {
+            string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+            if (guids.Length == 0)
+            {
+                Debug.LogError($"Setup could not find a {typeof(T).Name} asset in the project.");
+                return null;
+            }
+
+            if (guids.Length > 1)
+            {
+                Debug.LogWarning($"Found {guids.Length} {typeof(T).Name} assets; using the first.");
+            }
+
+            return AssetDatabase.LoadAssetAtPath<T>(AssetDatabase.GUIDToAssetPath(guids[0]));
+        }
+
+        /// <summary>Reads an object reference the way the Inspector shows it, e.g. to reuse a prefab another field points at.</summary>
+        public static Object GetReference(Object target, string fieldName)
+        {
+            SerializedProperty property = new SerializedObject(target).FindProperty(fieldName);
+            return property != null ? property.objectReferenceValue : null;
+        }
+
         public static bool SetColor(Object target, string fieldName, Color value)
         {
             SerializedObject serialized = new SerializedObject(target);
