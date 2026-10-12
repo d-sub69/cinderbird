@@ -68,6 +68,12 @@ namespace Cinderbird.Player
         private void UpdateTarget()
         {
             _targetChunk = null;
+            // Scooping needs the sieve in hand; a stowed sieve is inactive.
+            if (!_sieve.isActiveAndEnabled)
+            {
+                return;
+            }
+
             Ray ray = new Ray(_camera.position, _camera.forward);
             if (!Physics.Raycast(ray, out RaycastHit hit, _settings.Reach, _hitMask, QueryTriggerInteraction.Ignore))
             {

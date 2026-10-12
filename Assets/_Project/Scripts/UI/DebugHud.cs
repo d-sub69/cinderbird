@@ -3,6 +3,7 @@ using System.Text;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
+using Cinderbird.Player;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
 using TMPro;
@@ -24,7 +25,9 @@ namespace Cinderbird.UI
         [SerializeField] private TMP_Text _text;
         [SerializeField] private Sieve _sieve;
         [SerializeField] private SieveShakeController _shakeController;
-        [SerializeField] private SieveTipController _tipController;
+        [SerializeField] private PourController _pourController;
+        [SerializeField] private PlayerInteractor _interactor;
+        [SerializeField] private ToolBelt _toolBelt;
         [SerializeField] private Basket _basket;
         [SerializeField] private Wallet _wallet;
         [SerializeField] private NestController _nest;
@@ -42,8 +45,8 @@ namespace Cinderbird.UI
 
         private void Awake()
         {
-            if (_text == null || _sieve == null || _shakeController == null || _tipController == null ||
-                _basket == null || _wallet == null || _nest == null || _pile == null || _tierCatalog == null)
+            if (_text == null || _sieve == null || _shakeController == null || _pourController == null || _interactor == null ||
+                _toolBelt == null || _basket == null || _wallet == null || _nest == null || _pile == null || _tierCatalog == null)
             {
                 Debug.LogError($"{nameof(DebugHud)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -63,10 +66,11 @@ namespace Cinderbird.UI
             _sieve.Contents.Changed += MarkDirty;
             _basket.Contents.Changed += MarkDirty;
             _wallet.Currencies.Changed += MarkDirty;
-            _nest.InRangeChanged += OnNestRangeChanged;
+            _interactor.TargetChanged += OnPromptChanged;
+            _toolBelt.Inventory.Changed += OnPromptChanged;
             _pile.Dug += OnDug;
-            _tipController.Tipped += OnTipped;
-            _tipController.TipRefused += OnTipRefused;
+            _pourController.Poured += OnPoured;
+            _pourController.PourRefused += OnPourRefused;
         }
 
         // Start rather than OnEnable: the pile builds its grid in Awake, which may run after ours.
@@ -86,10 +90,11 @@ namespace Cinderbird.UI
             _sieve.Contents.Changed -= MarkDirty;
             _basket.Contents.Changed -= MarkDirty;
             _wallet.Currencies.Changed -= MarkDirty;
-            _nest.InRangeChanged -= OnNestRangeChanged;
+            _interactor.TargetChanged -= OnPromptChanged;
+            _toolBelt.Inventory.Changed -= OnPromptChanged;
             _pile.Dug -= OnDug;
-            _tipController.Tipped -= OnTipped;
-            _tipController.TipRefused -= OnTipRefused;
+            _pourController.Poured -= OnPoured;
+            _pourController.PourRefused -= OnPourRefused;
         }
 
         private void Update()
@@ -125,36 +130,41 @@ namespace Cinderbird.UI
             _dirty = true;
         }
 
-        private void OnNestRangeChanged(bool inRange)
+        private void OnPromptChanged()
         {
             _dirty = true;
-            // The prompt should appear as you step in, not up to one refresh interval later.
+            // The prompt should appear as you look at something, not up to one refresh interval later.
             _nextRefreshTime = 0f;
         }
 
-        private void OnTipped(int moved)
+        private void OnPoured(ToolDefinition tool, IPourTarget target, int moved)
         {
-            int left = _sieve.Contents.Embers.Count;
+            int left = _toolBelt.ActiveSource != null ? _toolBelt.ActiveSource.EmberCount : 0;
             if (left > 0)
             {
-                ShowMessage($"Basket full: {left} ember{(left == 1 ? "" : "s")} left in the sieve");
+                ShowMessage($"{Capitalized(target.DisplayName)} is full: {left} ember{(left == 1 ? "" : "s")} left in the {tool.DisplayName.ToLowerInvariant()}");
             }
         }
 
-        private void OnTipRefused(TipOutcome outcome)
+        private void OnPourRefused(ToolDefinition tool, PourOutcome outcome)
         {
             switch (outcome)
             {
-                case TipOutcome.AshRemaining:
+                case PourOutcome.AshRemaining:
                     ShowMessage("Shake out the ash first");
                     break;
-                case TipOutcome.NoEmbers:
-                    ShowMessage("No embers in the sieve");
+                case PourOutcome.NoEmbers:
+                    ShowMessage($"The {tool.DisplayName.ToLowerInvariant()} is empty");
                     break;
-                case TipOutcome.BasketFull:
-                    ShowMessage("Basket is full: take it to the nest");
+                case PourOutcome.TargetFull:
+                    ShowMessage("That's full: take the basket to the nest");
                     break;
             }
+        }
+
+        private static string Capitalized(string text)
+        {
+            return string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);
         }
 
         private void ShowMessage(string message)
@@ -211,19 +221,7 @@ namespace Cinderbird.UI
                 .Append("   Heat ").Append(currencies.Heat).Append(" / ").Append(_nest.HeatGoal)
                 .Append(" (").Append(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
 
-            if (_nest.InRange)
-            {
-                _builder.AppendLine().AppendLine();
-                int carried = basket.Embers.Count;
-                if (carried > 0)
-                {
-                    _builder.Append("Press E to feed the nest (").Append(carried).Append(carried == 1 ? " ember)" : " embers)");
-                }
-                else
-                {
-                    _builder.Append("The nest is hungry: bring embers in your basket");
-                }
-            }
+            AppendPourPrompt();
 
             if (_message != null)
             {
@@ -231,6 +229,27 @@ namespace Cinderbird.UI
             }
 
             _text.SetText(_builder);
+        }
+
+        private void AppendPourPrompt()
+        {
+            IPourTarget target = _interactor.PourTarget;
+            if (target == null)
+            {
+                return;
+            }
+
+            _builder.AppendLine().AppendLine();
+            ToolDefinition tool = _toolBelt.ActiveTool;
+            if (_toolBelt.ActiveSource == null)
+            {
+                _builder.Append(Capitalized(target.DisplayName)).Append(": hold the sieve or basket to pour");
+                return;
+            }
+
+            _builder.Append("Q: pour the ").Append(tool.DisplayName.ToLowerInvariant())
+                .Append(" into ").Append(target.DisplayName)
+                .Append(" (").Append(_toolBelt.ActiveSource.EmberCount).Append(" embers)");
         }
 
         private void AppendTierBreakdown(IReadOnlyList<Ember> embers)

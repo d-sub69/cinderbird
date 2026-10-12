@@ -20,6 +20,9 @@ namespace Cinderbird.Player
         [SerializeField] private InputActionReference _jumpAction;
         [Tooltip("Optional. While this action is held the camera stops turning, e.g. so mouse movement can shake the sieve.")]
         [SerializeField] private InputActionReference _suspendLookAction;
+        [Tooltip("Optional. If set, holding the suspend action only freezes the camera while this component is active " +
+                 "(e.g. the sieve's shake controller, so right-click doesn't freeze the view with the basket in hand).")]
+        [SerializeField] private Behaviour _suspendLookOnlyWhileEnabled;
         [Tooltip("Optional. Hold to sprint.")]
         [SerializeField] private InputActionReference _sprintAction;
         [Tooltip("Optional. Hold to crouch.")]
@@ -141,7 +144,8 @@ namespace Cinderbird.Player
         private void UpdateLook()
         {
             // Without the lock check, moving the mouse to click Editor buttons would spin the camera.
-            bool lookSuspended = _suspendLookAction != null && _suspendLookAction.action.IsPressed();
+            bool lookSuspended = IsHeld(_suspendLookAction) &&
+                                 (_suspendLookOnlyWhileEnabled == null || _suspendLookOnlyWhileEnabled.isActiveAndEnabled);
             if (Cursor.lockState == CursorLockMode.Locked && !lookSuspended)
             {
                 _look.Apply(_lookAction.action.ReadValue<Vector2>(), _settings.LookSensitivity);

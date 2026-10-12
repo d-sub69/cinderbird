@@ -2,39 +2,32 @@ using System;
 using System.Collections.Generic;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
-using Cinderbird.Sifting;
 using Cinderbird.Terrain;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Cinderbird.Nest
 {
     /// <summary>
-    /// Thin adapter: tracks whether the player is close enough, and on Interact pours the basket in
-    /// through <see cref="NestFeeding"/>. Also works out the Heat goal from the pile at start.
+    /// Thin adapter: makes the nest a pour target (look at it and pour the sieve or basket in), and works
+    /// out the Heat goal from the pile at start. Needs a collider (a trigger is fine) for the look raycast.
     /// </summary>
-    public sealed class NestController : MonoBehaviour
+    public sealed class NestController : MonoBehaviour, IPourTarget
     {
-        [SerializeField] private NestSettings _settings;
         [SerializeField] private EmberTierCatalog _tierCatalog;
-        [SerializeField] private Basket _basket;
         [SerializeField] private Wallet _wallet;
-        [Tooltip("The player's root transform, for the range check.")]
-        [SerializeField] private Transform _player;
         [Tooltip("The pile whose buried embers define the total Heat to collect.")]
         [SerializeField] private VoxelChunk _pile;
-        [SerializeField] private InputActionReference _interactAction;
 
-        private readonly List<Ember> _fedEmbers = new List<Ember>();
+        private NestIntake _intake;
         private int[] _glowByTier;
         private int[] _heatByTier;
 
-        /// <summary>Fired after a feeding with what it earned and the embers that went in.</summary>
-        public event Action<FeedResult, IReadOnlyList<Ember>> Fed;
+        /// <summary>Fired after a feeding with what it earned, the embers that went in, and where they came from.</summary>
+        public event Action<FeedResult, IReadOnlyList<Ember>, Vector3> Fed;
 
-        public event Action<bool> InRangeChanged;
+        public string DisplayName => "the nest";
 
-        public bool InRange { get; private set; }
+        public IEmberSink Sink => _intake;
 
         /// <summary>Total Heat of every ember in the pile at start; 0 until Start has run.</summary>
         public int HeatGoal { get; private set; }
@@ -43,13 +36,12 @@ namespace Cinderbird.Nest
 
         public int HeatOf(int tierIndex)
         {
-            return tierIndex >= 0 && tierIndex < _heatByTier.Length ? _heatByTier[tierIndex] : 0;
+            return _heatByTier != null && tierIndex >= 0 && tierIndex < _heatByTier.Length ? _heatByTier[tierIndex] : 0;
         }
 
         private void Awake()
         {
-            if (_settings == null || _tierCatalog == null || _basket == null || _wallet == null ||
-                _player == null || _pile == null || _interactAction == null)
+            if (_tierCatalog == null || _wallet == null || _pile == null)
             {
                 Debug.LogError($"{nameof(NestController)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -57,22 +49,7 @@ namespace Cinderbird.Nest
             }
 
             CacheTierValues();
-        }
-
-        private void OnEnable()
-        {
-            if (_interactAction != null)
-            {
-                _interactAction.action.Enable();
-            }
-        }
-
-        private void OnDisable()
-        {
-            if (_interactAction != null)
-            {
-                _interactAction.action.Disable();
-            }
+            _intake = new NestIntake(_wallet.Currencies, _glowByTier, _heatByTier);
         }
 
         // Start, not Awake: the pile spawns its embers in its own Awake.
@@ -81,35 +58,9 @@ namespace Cinderbird.Nest
             HeatGoal = EmberValuation.Evaluate(_pile.Embers, _glowByTier, _heatByTier).Heat;
         }
 
-        private void Update()
+        public void OnPoured(IReadOnlyList<Ember> embers, Vector3 fromPosition)
         {
-            UpdateRange();
-
-            if (!InRange || Cursor.lockState != CursorLockMode.Locked || !_interactAction.action.WasPressedThisFrame())
-            {
-                return;
-            }
-
-            FeedResult result = NestFeeding.Feed(_basket.Contents, _wallet.Currencies, _glowByTier, _heatByTier, _fedEmbers);
-            if (result.EmberCount > 0)
-            {
-                Fed?.Invoke(result, _fedEmbers);
-            }
-        }
-
-        private void UpdateRange()
-        {
-            // Horizontal distance, so standing on a slope or jumping doesn't drop you out of range.
-            Vector3 offset = _player.position - transform.position;
-            offset.y = 0f;
-            bool inRange = offset.sqrMagnitude <= _settings.PourRadius * _settings.PourRadius;
-            if (inRange == InRange)
-            {
-                return;
-            }
-
-            InRange = inRange;
-            InRangeChanged?.Invoke(inRange);
+            Fed?.Invoke(_intake.LastResult, embers, fromPosition);
         }
 
         private void CacheTierValues()
@@ -123,17 +74,6 @@ namespace Cinderbird.Nest
                 _glowByTier[i] = tier != null ? tier.GlowValue : 0;
                 _heatByTier[i] = tier != null ? tier.HeatValue : 0;
             }
-        }
-
-        private void OnDrawGizmosSelected()
-        {
-            if (_settings == null)
-            {
-                return;
-            }
-
-            Gizmos.color = new Color(1f, 0.6f, 0.2f, 0.8f);
-            Gizmos.DrawWireSphere(transform.position, _settings.PourRadius);
         }
     }
 }

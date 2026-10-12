@@ -1,3 +1,4 @@
+using Cinderbird.Embers;
 using UnityEngine;
 
 namespace Cinderbird.Sifting
@@ -5,8 +6,10 @@ namespace Cinderbird.Sifting
     /// <summary>
     /// Owns the basket's <see cref="BasketContents"/> so other components can reach it through the Inspector.
     /// </summary>
-    public sealed class Basket : MonoBehaviour
+    public sealed class Basket : MonoBehaviour, IEmberHolder
     {
+        public IEmberSource Source => Contents;
+
         [SerializeField] private BasketSettings _settings;
 
         private BasketContents _contents;

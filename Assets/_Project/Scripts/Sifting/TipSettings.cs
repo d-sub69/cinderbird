@@ -5,10 +5,10 @@ namespace Cinderbird.Sifting
     [CreateAssetMenu(fileName = "TipSettings", menuName = "Cinderbird/Tip Settings")]
     public sealed class TipSettings : ScriptableObject
     {
-        [Header("Sieve tip")]
-        [Tooltip("Peak roll in degrees. Flip the sign if the sieve tips away from the basket.")]
-        [SerializeField] private float _tipAngle = 100f;
-        [Tooltip("Seconds for the whole tip, out and back.")]
+        [Header("Pour")]
+        [Tooltip("Peak forward tilt of a tool when pouring, in degrees. Flip the sign if it tips toward you.")]
+        [SerializeField] private float _tipAngle = 75f;
+        [Tooltip("Seconds for the whole pour, out and back.")]
         [SerializeField, Min(0.05f)] private float _tipDuration = 0.5f;
 
         [Header("Refused tip")]

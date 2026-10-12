@@ -5,10 +5,6 @@ namespace Cinderbird.Nest
     [CreateAssetMenu(fileName = "NestSettings", menuName = "Cinderbird/Nest Settings")]
     public sealed class NestSettings : ScriptableObject
     {
-        [Header("Interaction")]
-        [Tooltip("How close (meters, ignoring height) the player must be to feed the nest.")]
-        [SerializeField, Min(0.1f)] private float _pourRadius = 2.5f;
-
         [Header("Flare")]
         [Tooltip("Flare added per point of Heat in a landing ember.")]
         [SerializeField, Min(0f)] private float _flarePerHeat = 0.15f;
@@ -43,7 +39,6 @@ namespace Cinderbird.Nest
         [Tooltip("Flying embers are drawn this much bigger than in the basket so they read at a distance.")]
         [SerializeField, Min(0.1f)] private float _flightScale = 1.5f;
 
-        public float PourRadius => _pourRadius;
         public float FlarePerHeat => _flarePerHeat;
         public float FlareHalfLife => _flareHalfLife;
         public float MaxFlare => _maxFlare;

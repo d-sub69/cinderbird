@@ -6,9 +6,9 @@ namespace Cinderbird.Sifting
 {
     /// <summary>
     /// Embers carried in the basket on the way to the nest. Holds a limited number, so full baskets
-    /// force a trip.
+    /// force a trip. Both a pour source (into the nest) and a pour target (from the sieve).
     /// </summary>
-    public sealed class BasketContents
+    public sealed class BasketContents : IEmberSource, IEmberSink
     {
         private readonly List<Ember> _embers;
 
@@ -32,6 +32,34 @@ namespace Cinderbird.Sifting
         public int FreeSpace => Capacity - _embers.Count;
 
         public bool IsFull => FreeSpace == 0;
+
+        public int EmberCount => _embers.Count;
+
+        /// <summary>Only shaken-out embers ever go in, so a basket never holds ash.</summary>
+        public bool HasAsh => false;
+
+        /// <summary>
+        /// Moves up to <paramref name="count"/> of the most recently added embers into <paramref name="output"/>
+        /// (appended, oldest of them first). Taking from the end keeps the rest at their indices, and spots.
+        /// </summary>
+        public int TakeNewest(int count, List<Ember> output)
+        {
+            int taken = Math.Min(Math.Max(0, count), _embers.Count);
+            if (taken == 0)
+            {
+                return 0;
+            }
+
+            int start = _embers.Count - taken;
+            for (int i = start; i < _embers.Count; i++)
+            {
+                output.Add(_embers[i]);
+            }
+
+            _embers.RemoveRange(start, taken);
+            Changed?.Invoke();
+            return taken;
+        }
 
         /// <summary>Empties the basket into <paramref name="output"/> (appended).</summary>
         /// <returns>How many embers were taken.</returns>

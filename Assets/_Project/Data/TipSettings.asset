@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77688aeb1b831814887c9c37c5748341, type: 3}
   m_Name: TipSettings
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Sifting.TipSettings
-  _tipAngle: 100
+  _tipAngle: 75
   _tipDuration: 0.5
   _refuseAngle: 10
   _refuseDuration: 0.35

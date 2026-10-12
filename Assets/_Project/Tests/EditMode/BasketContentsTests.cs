@@ -59,6 +59,22 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void TakeNewest_TakesFromTheEnd()
+        {
+            BasketContents basket = new BasketContents(5);
+            basket.Add(new List<Ember> { new Ember(Vector3.zero, 0), new Ember(Vector3.zero, 1), new Ember(Vector3.zero, 2) });
+            List<Ember> output = new List<Ember>();
+
+            int taken = basket.TakeNewest(2, output);
+
+            Assert.That(taken, Is.EqualTo(2));
+            Assert.That(output[0].TierIndex, Is.EqualTo(1));
+            Assert.That(output[1].TierIndex, Is.EqualTo(2));
+            Assert.That(basket.Embers.Count, Is.EqualTo(1));
+            Assert.That(basket.HasAsh, Is.False);
+        }
+
+        [Test]
         public void TakeAll_EmptiesBasketIntoOutput()
         {
             BasketContents basket = new BasketContents(5);

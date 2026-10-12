@@ -7,9 +7,9 @@ namespace Cinderbird.Sifting
     /// <summary>
     /// What is in the sieve: loose ash and the embers caught with it.
     /// Rule: you can only scoop into an ash-free sieve, so the loop is scoop → shake → scoop.
-    /// Embers pile up across scoops until tipped out.
+    /// Embers pile up across scoops until poured out.
     /// </summary>
-    public sealed class SieveContents
+    public sealed class SieveContents : IEmberSource
     {
         private readonly List<Ember> _embers = new List<Ember>();
 
@@ -17,6 +17,10 @@ namespace Cinderbird.Sifting
 
         /// <summary>Cubic meters of ash still in the sieve.</summary>
         public float AshVolume { get; private set; }
+
+        public int EmberCount => _embers.Count;
+
+        public bool HasAsh => AshVolume > 0f;
 
         public IReadOnlyList<Ember> Embers => _embers;
 
@@ -55,7 +59,7 @@ namespace Cinderbird.Sifting
         /// indices, which the views rely on to keep each ember in its spot.
         /// </summary>
         /// <returns>How many embers were taken.</returns>
-        public int TakeNewestEmbers(int count, List<Ember> output)
+        public int TakeNewest(int count, List<Ember> output)
         {
             int taken = Math.Min(Math.Max(0, count), _embers.Count);
             if (taken == 0)

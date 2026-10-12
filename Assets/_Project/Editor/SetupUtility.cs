@@ -58,12 +58,52 @@ namespace Cinderbird.EditorTools
             if (map.FindAction(actionName) == null)
             {
                 map.AddAction(actionName, InputActionType.Button, bindingPath, groups: KeyboardBindingGroup(asset));
-                // The .inputactions file is JSON owned by the Input System; writing its own serialization keeps ids intact.
-                File.WriteAllText(InputActionsPath, asset.ToJson());
-                AssetDatabase.ImportAsset(InputActionsPath, ImportAssetOptions.ForceUpdate);
+                SaveInputActions(asset);
             }
 
             return FindActionReference(mapName, actionName);
+        }
+
+        /// <summary>Adds a Value/Axis action with one binding (e.g. the mouse wheel) if it isn't there yet.</summary>
+        public static InputActionReference EnsureAxisAction(string mapName, string actionName, string bindingPath)
+        {
+            InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputActionsPath);
+            if (asset == null)
+            {
+                Debug.LogError($"Input actions not found at {InputActionsPath}.");
+                return null;
+            }
+
+            InputActionMap map = asset.FindActionMap(mapName, true);
+            if (map.FindAction(actionName) == null)
+            {
+                map.AddAction(actionName, InputActionType.Value, bindingPath, expectedControlLayout: "Axis");
+                SaveInputActions(asset);
+            }
+
+            return FindActionReference(mapName, actionName);
+        }
+
+        /// <summary>Renames an action, keeping its id and bindings, unless the new name is already taken.</summary>
+        public static void RenameAction(string mapName, string oldName, string newName)
+        {
+            InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputActionsPath);
+            InputActionMap map = asset != null ? asset.FindActionMap(mapName, true) : null;
+            InputAction action = map?.FindAction(oldName);
+            if (action == null || map.FindAction(newName) != null)
+            {
+                return;
+            }
+
+            action.Rename(newName);
+            SaveInputActions(asset);
+        }
+
+        private static void SaveInputActions(InputActionAsset asset)
+        {
+            // The .inputactions file is JSON owned by the Input System; writing its own serialization keeps ids intact.
+            File.WriteAllText(InputActionsPath, asset.ToJson());
+            AssetDatabase.ImportAsset(InputActionsPath, ImportAssetOptions.ForceUpdate);
         }
 
         public static InputActionReference FindActionReference(string mapName, string actionName)
@@ -123,6 +163,87 @@ namespace Cinderbird.EditorTools
         {
             SerializedProperty property = new SerializedObject(target).FindProperty(fieldName);
             return property != null ? property.objectReferenceValue : null;
+        }
+
+        /// <summary>Loads a ScriptableObject asset, creating it with default values if it doesn't exist yet.</summary>
+        public static T EnsureAsset<T>(string path) where T : ScriptableObject
+        {
+            T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+            if (asset != null)
+            {
+                return asset;
+            }
+
+            asset = ScriptableObject.CreateInstance<T>();
+            AssetDatabase.CreateAsset(asset, path);
+            return asset;
+        }
+
+        /// <summary>Sets a serialized field of any simple type (string, float, bool) through the Inspector path.</summary>
+        public static bool SetValue(Object target, string fieldName, System.Action<SerializedProperty> assign)
+        {
+            SerializedObject serialized = new SerializedObject(target);
+            SerializedProperty property = serialized.FindProperty(fieldName);
+            if (property == null)
+            {
+                Debug.LogError($"{target.GetType().Name} has no serialized field '{fieldName}'.", target);
+                return false;
+            }
+
+            assign(property);
+            serialized.ApplyModifiedProperties();
+            return true;
+        }
+
+        /// <summary>Fills a serialized array of object references (e.g. a list of actions or images).</summary>
+        public static bool SetReferenceArray(Object target, string fieldName, Object[] values)
+        {
+            return SetValue(target, fieldName, property =>
+            {
+                property.arraySize = values.Length;
+                for (int i = 0; i < values.Length; i++)
+                {
+                    property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+                }
+            });
+        }
+
+        public static T GetOrAddComponent<T>(GameObject target) where T : Component
+        {
+            return target.TryGetComponent(out T existing) ? existing : Undo.AddComponent<T>(target);
+        }
+
+        /// <summary>Moves a transform under a new parent without changing where it is in the world (with Undo).</summary>
+        public static void Reparent(Transform child, Transform newParent)
+        {
+            if (child.parent != newParent)
+            {
+                Undo.SetTransformParent(child, newParent, "Reparent");
+            }
+        }
+
+        /// <summary>Moves a pivot while its children stay put in the world, so only the rotation point changes.</summary>
+        public static void MovePivotKeepingChildren(Transform pivot, Vector3 newLocalPosition)
+        {
+            int count = pivot.childCount;
+            Vector3[] positions = new Vector3[count];
+            Quaternion[] rotations = new Quaternion[count];
+            for (int i = 0; i < count; i++)
+            {
+                Transform child = pivot.GetChild(i);
+                Undo.RecordObject(child, "Move pivot");
+                positions[i] = child.position;
+                rotations[i] = child.rotation;
+            }
+
+            Undo.RecordObject(pivot, "Move pivot");
+            pivot.localPosition = newLocalPosition;
+            for (int i = 0; i < count; i++)
+            {
+                Transform child = pivot.GetChild(i);
+                child.position = positions[i];
+                child.rotation = rotations[i];
+            }
         }
 
         public static bool SetColor(Object target, string fieldName, Color value)

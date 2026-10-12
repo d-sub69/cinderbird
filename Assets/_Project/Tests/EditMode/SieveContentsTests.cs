@@ -109,7 +109,7 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
-        public void TakeNewestEmbers_TakesFromTheEnd_InOriginalOrder()
+        public void TakeNewest_TakesFromTheEnd_InOriginalOrder()
         {
             SieveContents sieve = new SieveContents();
             List<Ember> embers = new List<Ember>();
@@ -121,7 +121,7 @@ namespace Cinderbird.Tests.EditMode
             sieve.TryAdd(0f, embers);
             List<Ember> taken = new List<Ember>();
 
-            int count = sieve.TakeNewestEmbers(2, taken);
+            int count = sieve.TakeNewest(2, taken);
 
             Assert.That(count, Is.EqualTo(2));
             Assert.That(taken[0].TierIndex, Is.EqualTo(3));
@@ -131,27 +131,27 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
-        public void TakeNewestEmbers_MoreThanPresent_TakesAll()
+        public void TakeNewest_MoreThanPresent_TakesAll()
         {
             SieveContents sieve = new SieveContents();
             sieve.TryAdd(0f, Embers(2));
 
-            int count = sieve.TakeNewestEmbers(10, new List<Ember>());
+            int count = sieve.TakeNewest(10, new List<Ember>());
 
             Assert.That(count, Is.EqualTo(2));
             Assert.That(sieve.Embers, Is.Empty);
         }
 
         [Test]
-        public void TakeNewestEmbers_FiresChangedOnlyWhenSomethingMoves()
+        public void TakeNewest_FiresChangedOnlyWhenSomethingMoves()
         {
             SieveContents sieve = new SieveContents();
             sieve.TryAdd(0f, Embers(2));
             int changes = 0;
             sieve.Changed += () => changes++;
 
-            sieve.TakeNewestEmbers(0, new List<Ember>());
-            sieve.TakeNewestEmbers(1, new List<Ember>());
+            sieve.TakeNewest(0, new List<Ember>());
+            sieve.TakeNewest(1, new List<Ember>());
 
             Assert.That(changes, Is.EqualTo(1));
         }

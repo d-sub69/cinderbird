@@ -22,9 +22,7 @@ namespace Cinderbird.Nest
         [SerializeField] private EmberTierCatalog _tierCatalog;
         [Tooltip("Small sphere with an emissive URP Lit material and no collider.")]
         [SerializeField] private Renderer _emberPrefab;
-        [Tooltip("Where embers start: the basket.")]
-        [SerializeField] private Transform _launchPoint;
-        [Tooltip("Where embers land: the base of the fire.")]
+        [Tooltip("Where embers land: the base of the fire. They start from whichever tool was poured.")]
         [SerializeField] private Transform _landingPoint;
 
         private Renderer[] _visuals;
@@ -41,8 +39,7 @@ namespace Cinderbird.Nest
 
         private void Awake()
         {
-            if (_nest == null || _settings == null || _tierCatalog == null || _emberPrefab == null ||
-                _launchPoint == null || _landingPoint == null)
+            if (_nest == null || _settings == null || _tierCatalog == null || _emberPrefab == null || _landingPoint == null)
             {
                 Debug.LogError($"{nameof(NestPourEffect)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -106,7 +103,7 @@ namespace Cinderbird.Nest
             }
         }
 
-        private void OnFed(FeedResult result, IReadOnlyList<Ember> embers)
+        private void OnFed(FeedResult result, IReadOnlyList<Ember> embers, Vector3 fromPosition)
         {
             float now = Time.time;
             for (int i = 0; i < embers.Count; i++)
@@ -122,17 +119,17 @@ namespace Cinderbird.Nest
                     continue;
                 }
 
-                LaunchFlight(slot, tierIndex, tier, now + i * _settings.FlightStagger);
+                LaunchFlight(slot, tierIndex, tier, now + i * _settings.FlightStagger, fromPosition);
             }
         }
 
-        private void LaunchFlight(int slot, int tierIndex, EmberTier tier, float startTime)
+        private void LaunchFlight(int slot, int tierIndex, EmberTier tier, float startTime, Vector3 fromPosition)
         {
             _inUse[slot] = true;
             _activeCount++;
             _startTimes[slot] = startTime;
             _tiers[slot] = tierIndex;
-            _launchPositions[slot] = _launchPoint.position + RandomOffset(LaunchSpread);
+            _launchPositions[slot] = fromPosition + RandomOffset(LaunchSpread);
 
             Renderer visual = _visuals[slot];
             visual.transform.localScale = Vector3.one * (tier.VisualScale * _settings.FlightScale);

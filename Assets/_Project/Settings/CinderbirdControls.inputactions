@@ -57,7 +57,7 @@
                     "priority": 0
                 },
                 {
-                    "name": "Tip",
+                    "name": "Pour",
                     "type": "Button",
                     "id": "63bd3412-0111-4339-9549-f07f16abfae3",
                     "expectedControlType": "",
@@ -90,6 +90,66 @@
                     "name": "Crouch",
                     "type": "Button",
                     "id": "92aebfa0-bbd3-468e-bb43-8a55616527c8",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "CycleTool",
+                    "type": "Value",
+                    "id": "30e565c5-2859-46c8-9a98-17705bce41d7",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true,
+                    "priority": 0
+                },
+                {
+                    "name": "Slot1",
+                    "type": "Button",
+                    "id": "3b0a3f96-6bc5-4145-a70a-400c85dc6651",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "Slot2",
+                    "type": "Button",
+                    "id": "5f723717-5a56-4567-8f69-8eedb5c57cc3",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "Slot3",
+                    "type": "Button",
+                    "id": "b325a923-3612-4c08-bb4a-50bf8257c60b",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "Slot4",
+                    "type": "Button",
+                    "id": "0809f712-a137-4f2e-82b3-c2184ca8b22a",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "Slot5",
+                    "type": "Button",
+                    "id": "2b8b1122-655b-4628-a94c-e2a5698f032f",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -380,7 +440,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Tip",
+                    "action": "Pour",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -414,6 +474,72 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "Crouch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "d5299623-4cb2-4261-b085-6e51a7180034",
+                    "path": "<Mouse>/scroll/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "CycleTool",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "29971c77-7426-43d5-8915-3cbe1da04c1e",
+                    "path": "<Keyboard>/1",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "Slot1",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "160ab2cc-69a3-47c1-93a2-b160e8a2eb99",
+                    "path": "<Keyboard>/2",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "Slot2",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b52cba6b-5d3d-4910-9932-8b29465fd51b",
+                    "path": "<Keyboard>/3",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "Slot3",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "e6af3c72-6a58-43e1-a72c-0b837462e2fb",
+                    "path": "<Keyboard>/4",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "Slot4",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c2e87d38-5605-4b27-889d-784d4fda57d1",
+                    "path": "<Keyboard>/5",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "Slot5",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
