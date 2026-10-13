@@ -16,23 +16,24 @@ upgrades tools until every ember is found. Final ember = phoenix reborn = game e
 - TextMeshPro for UI text
 - Git + Git LFS for binary assets
 
-## Current phase: Phase 1 — technical foundation
-Prototype 1 (the core loop on one chunk) and Prototype 2 (tools, inventory, placeable basket, hidden
-embers, ash pour) are done and playtested. Phase 1 builds what everything else depends on.
+## Current phase: Phase 2 — vertical slice
+Done and playtested: Prototype 1 (core loop), Prototype 2 (tools, inventory, placeable basket, hidden embers,
+ash pour), Phase 1 (multi-chunk Burst terrain, ash layers, save system, game shell with pause/options,
+performance budget) and ash settling (scoops drain while walls slide in, flying embers).
 
-**In scope (one committed step each)**
-- 1A. Multi-chunk terrain: `VoxelWorld` of 32³-cell chunks sharing border samples (seamless), world-level
-  dig/volume/sampling, embers per chunk; 48 × 24 × 48 m test mountain (size in settings)
-- 1B. Meshing and collider baking on Jobs + Burst; performance overlay and profiler markers
-- 1C. Ash layers in the voxel data (layer id per sample), per-layer ember tables, locked-layer rule
-  (unlocking by Heat comes with the vertical slice), placeholder layer tints
-- 1D. Save system: changed chunks (quantized + gzip), embers, tools, currencies, player; versioned JSON
-  via JsonUtility, atomic writes, autosave
-- 1E. Game shell: pause/options menu, single `GameBootstrap`, `Main.unity`, performance budget pass
-- Right after Phase 1: ash settling physics (done: S1 solver, S2 in game)
+Phase 2 builds a short, complete slice of the game from the design doc, one committed step each:
+- 2A. Heat levels 1–3 from data; layers unlock by the design rule (90% of the layers above cleared + a Heat
+  level) instead of the F4 debug key (kept for testing); HUD shows level and progress
+- 2B. Shop stall at the nest (look + E): Glow buys upgrades, cost = base × 1.15^level; 3 sieves (scoop size)
+  and the mesh (catch more embers); upgrade levels saved
+- 2C. 5 offerings with lore, found in the ash; sell or place on the shrine shelf; a shelf set bonus
+- 2D. Rhythm shake: the nest pulses; shaking on the beat builds the Clean Sift bonus up to ×1.5 Glow, never
+  punished off-beat
+- 2E. One helper: a salamander cousin sifting a patch slowly while the game is open
+- 2F. One power: Warm Wind (Heat 1), blows loose ash off an area to expose embers
+- 2G. Phoenix silhouette in the nest fire (stages 1–3) and the first valley-thaw stage (placeholder art)
 
-Packages approved for 1B: Mathematics (new), Burst and Collections (already present indirectly; pin them).
-**Still out of scope:** shop, upgrades, helpers, powers, valley, audio polish, real models.
+**Still out of scope:** more layers' content, more helpers and powers, feathers, audio polish, real models.
 
 ## Folder structure
 ```
@@ -127,13 +128,11 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   with source URL and license **in the same commit** it is added.
 - Prefer CC0 (Kenney, Quaternius, Poly Haven, ambientCG). CC-BY is fine with credit. No "non-commercial" licenses.
 
-## Definition of done — Phase 1
-- [x] I can dig anywhere on a full-size mountain with no visible seams and a steady frame rate
-- [x] The mountain has visible ash layers; locked layers can't be dug into
-- [x] I can quit, reload, and continue exactly where I left off (terrain, embers, tools, Glow/Heat)
-- [x] Esc opens a pause menu with options that persist
-- [ ] The game holds its frame-rate target on the agreed minimum-spec PC (budget met on the dev PC, 2026-10-13;
-      still to confirm on real min-spec hardware)
-
-(Prototype 1 and Prototype 2 are done: core loop, tools, inventory, placeable basket, hidden embers, ash
-pour, all playtested.)
+## Definition of done — Phase 2
+- [ ] Heat levels 1–3 work and open layer 2 by the design rule; the HUD shows where I stand
+- [ ] I can buy the 3 sieves and the mesh in the shop and feel the difference
+- [ ] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
+- [ ] Shaking on the beat earns the Clean Sift bonus
+- [ ] A salamander cousin and Warm Wind help me
+- [ ] The phoenix silhouette grows in the fire and the valley starts to thaw
+- [ ] Carried over from Phase 1: the frame-rate target holds on real minimum-spec hardware

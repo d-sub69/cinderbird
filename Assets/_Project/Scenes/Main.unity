@@ -261,6 +261,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Sifting.Sieve
   _settings: {fileID: 11400000, guid: 08ca2898637c68c4c9785752922998fe, type: 2}
+  _testMode: {fileID: 11400000, guid: 81620a796706cdf428e4805d9fbd09b5, type: 2}
 --- !u!114 &3195222
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12084,6 +12085,7 @@ MonoBehaviour:
   _hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  _testMode: {fileID: 11400000, guid: 81620a796706cdf428e4805d9fbd09b5, type: 2}
 --- !u!114 &1069582113
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -19390,6 +19392,8 @@ MonoBehaviour:
   _pile: {fileID: 273172401}
   _tierCatalog: {fileID: 11400000, guid: d4be10cff6273e548820db03d0c2bdd1, type: 2}
   _save: {fileID: 354520938}
+  _heat: {fileID: 1752160257}
+  _testMode: {fileID: 11400000, guid: 81620a796706cdf428e4805d9fbd09b5, type: 2}
 --- !u!114 &1533965563
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -23832,6 +23836,7 @@ GameObject:
   - component: {fileID: 1752160254}
   - component: {fileID: 1752160255}
   - component: {fileID: 1752160256}
+  - component: {fileID: 1752160257}
   m_Layer: 0
   m_Name: Nest
   m_TagString: Untagged
@@ -23955,6 +23960,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Player.NoPlacementZone
   _areaName: the nest
+--- !u!114 &1752160257
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1752160249}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2f742f4a241ca294b83bea6ba94d9877, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Nest.NestHeat
+  _levelTable: {fileID: 11400000, guid: 04666f9660d0a134fb21bd88bac19b51, type: 2}
+  _wallet: {fileID: 1069582113}
+  _pile: {fileID: 273172401}
+  _layers: {fileID: 11400000, guid: f9d8e2bbd064f7044ae59a1b378b03bc, type: 2}
 --- !u!1 &1785307945
 GameObject:
   m_ObjectHideFlags: 0

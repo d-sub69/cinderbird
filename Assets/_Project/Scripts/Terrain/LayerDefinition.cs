@@ -19,11 +19,19 @@ namespace Cinderbird.Terrain
         [Tooltip("Relative chance of each ember tier, in the tier catalog's order. 0 = never in this layer.")]
         [SerializeField] private float[] _tierWeights = { 100f };
 
+        [Header("Opening (ignored for the outermost layer, which starts open)")]
+        [Tooltip("Nest Heat level needed before this layer melts open.")]
+        [SerializeField, Min(0)] private int _unlockHeatLevel;
+        [Tooltip("Share of the embers of every layer above that must be out of the pile first (0.9 = 90%).")]
+        [SerializeField, Range(0f, 1f)] private float _unlockClearedShare = 0.9f;
+
         public string DisplayName => _displayName;
         public Color Tint => _tint;
         public Color DustColor => _dustColor;
         public float StartDepth => _startDepth;
         public float EmbersPerCubicMeter => _embersPerCubicMeter;
+        public int UnlockHeatLevel => _unlockHeatLevel;
+        public float UnlockClearedShare => _unlockClearedShare;
 
         /// <summary>Tier weights padded or cut to <paramref name="tierCount"/> entries.</summary>
         public float[] TierWeights(int tierCount)

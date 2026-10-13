@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
@@ -39,6 +40,10 @@ namespace Cinderbird.UI
         [SerializeField] private EmberTierCatalog _tierCatalog;
         [Tooltip("Optional: shows save and load messages.")]
         [SerializeField] private SaveController _save;
+        [Tooltip("Optional: shows the Heat level and what the next layer needs.")]
+        [SerializeField] private NestHeat _heat;
+        [Tooltip("Optional: shows a reminder while test mode is on.")]
+        [SerializeField] private TestModeSettings _testMode;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -86,6 +91,11 @@ namespace Cinderbird.UI
             {
                 _save.Notice += ShowMessage;
             }
+
+            if (_heat != null)
+            {
+                _heat.LevelReached += OnLevelReached;
+            }
             _pourController.Poured += OnPoured;
             if (_scoop != null)
             {
@@ -116,6 +126,11 @@ namespace Cinderbird.UI
             if (_save != null)
             {
                 _save.Notice -= ShowMessage;
+            }
+
+            if (_heat != null)
+            {
+                _heat.LevelReached -= OnLevelReached;
             }
             _pourController.Poured -= OnPoured;
             if (_scoop != null)
@@ -158,7 +173,7 @@ namespace Cinderbird.UI
 
         private void OnLayerUnlocked(int layer)
         {
-            ShowMessage($"The {_pile.LayerName(layer)} is open (debug unlock)");
+            ShowMessage($"The {_pile.LayerName(layer)} melts open");
         }
 
         private void OnDug(DigResult result, Vector3 center, float radius)
@@ -248,6 +263,10 @@ namespace Cinderbird.UI
             SieveContents sieve = _sieve.Contents;
             BasketContents basket = _basket.Contents;
             _builder.Clear();
+            if (_testMode != null && _testMode.Active)
+            {
+                _builder.AppendLine("<color=#FFB040>TEST MODE: big scoop, no shaking, unlimited sieve</color>");
+            }
 
             _builder.Append("Sieve: ").AppendFixed(sieve.AshVolume * 1000f, 0).Append(" L ash");
             if (sieve.HasAsh)
@@ -296,6 +315,7 @@ namespace Cinderbird.UI
                 .Append("   Heat ").AppendInt(currencies.Heat).Append(" / ").AppendInt(_nest.HeatGoal)
                 .Append(" (").AppendInt(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
 
+            AppendHeatLevel();
             AppendPourPrompt();
             AppendPickUpPrompt();
             AppendPlacementPrompt();
@@ -306,6 +326,46 @@ namespace Cinderbird.UI
             }
 
             _text.SetText(_builder);
+        }
+
+        private void OnLevelReached(int level)
+        {
+            ShowMessage($"The nest reaches Heat level {level}");
+        }
+
+        // "Heat level 1 (120 / 250)" and what the next sealed layer still needs.
+        private void AppendHeatLevel()
+        {
+            if (_heat == null || _heat.Levels == null)
+            {
+                return;
+            }
+
+            int heat = _heat.Heat;
+            int level = _heat.Level;
+            _builder.AppendLine().Append("Heat level ").AppendInt(level);
+            if (level < _heat.Levels.MaxLevel)
+            {
+                _builder.Append(" (").AppendInt(heat).Append(" / ").AppendInt(_heat.Levels.HeatFor(level + 1)).Append(')');
+            }
+
+            int next = _heat.NextLayer;
+            if (next < 0)
+            {
+                return;
+            }
+
+            int neededLevel = _heat.RequiredLevelFor(next);
+            float neededShare = _heat.RequiredClearedShareFor(next);
+            float cleared = _heat.LeastClearedAbove(next, out int holding);
+            _builder.AppendLine().Append("To open the ").Append(_pile.LayerName(next)).Append(": Heat level ").AppendInt(neededLevel)
+                .Append(level >= neededLevel ? " (done)" : string.Empty);
+            if (holding >= 0)
+            {
+                _builder.Append(", ").Append(_pile.LayerName(holding)).Append(' ')
+                    .AppendInt(Mathf.FloorToInt(cleared * 100f)).Append("% of ").AppendInt(Mathf.RoundToInt(neededShare * 100f))
+                    .Append("% cleared");
+            }
         }
 
         private void AppendPourPrompt()

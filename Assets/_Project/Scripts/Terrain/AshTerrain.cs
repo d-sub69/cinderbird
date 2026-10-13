@@ -19,6 +19,9 @@ namespace Cinderbird.Terrain
         // Chunks whose embers changed since generation; a dig can take embers without changing any sample.
         private readonly bool[] _embersChanged;
         private readonly int[] _emberVersions;
+        // Embers per ash layer: as generated, and still in the pile. Their ratio is how cleared a layer is.
+        private readonly int[] _initialByLayer;
+        private readonly int[] _buriedByLayer;
         // Generated surface height per sample column, in samples (x + z * SamplesX).
         private float[] _naturalSurface;
         private readonly List<int> _chunkScratch = new List<int>();
@@ -27,6 +30,8 @@ namespace Cinderbird.Terrain
         {
             World = world;
             Locks = new LayerLocks(layerCount);
+            _initialByLayer = new int[Locks.Count];
+            _buriedByLayer = new int[Locks.Count];
             _embersChanged = new bool[world.ChunkCount];
             _emberVersions = new int[world.ChunkCount];
             _embers = new EmberField[world.ChunkCount];
@@ -141,11 +146,7 @@ namespace Cinderbird.Terrain
             }
 
             TotalAshVolume = World.TotalAshVolume();
-            BuriedEmberCount = 0;
-            for (int i = 0; i < _embers.Length; i++)
-            {
-                BuriedEmberCount += _embers[i].Count;
-            }
+            RecountBuried();
         }
 
         private void ClearModified()
@@ -166,13 +167,61 @@ namespace Cinderbird.Terrain
                 _embers[i].AddRange(spawned);
                 BuriedEmberCount += spawned.Count;
             }
+
+            RecountBuried();
+            Array.Copy(_buriedByLayer, _initialByLayer, _buriedByLayer.Length);
         }
 
-        /// <summary>Buries one specific ember (e.g. the single Heart Ember) where it says.</summary>
+        /// <summary>Buries one specific ember (e.g. the single Heart Ember) where it says, as part of the mountain.</summary>
         public void PlaceEmber(Ember ember)
         {
             _embers[World.ChunkIndexAt(ember.Position)].Add(ember);
             BuriedEmberCount++;
+            if (ember.Layer < _buriedByLayer.Length)
+            {
+                _buriedByLayer[ember.Layer]++;
+                _initialByLayer[ember.Layer]++;
+            }
+        }
+
+        /// <summary>Share of a layer's embers already taken out of the pile (0..1); 1 for a layer that had none.</summary>
+        public float ClearedShare(int layer)
+        {
+            if (layer < 0 || layer >= _initialByLayer.Length || _initialByLayer[layer] == 0)
+            {
+                return 1f;
+            }
+
+            return 1f - _buriedByLayer[layer] / (float)_initialByLayer[layer];
+        }
+
+        public int InitialEmbersIn(int layer)
+        {
+            return layer >= 0 && layer < _initialByLayer.Length ? _initialByLayer[layer] : 0;
+        }
+
+        public int BuriedEmbersIn(int layer)
+        {
+            return layer >= 0 && layer < _buriedByLayer.Length ? _buriedByLayer[layer] : 0;
+        }
+
+        private void RecountBuried()
+        {
+            BuriedEmberCount = 0;
+            Array.Clear(_buriedByLayer, 0, _buriedByLayer.Length);
+            for (int i = 0; i < _embers.Length; i++)
+            {
+                EmberField field = _embers[i];
+                BuriedEmberCount += field.Count;
+                for (int e = 0; e < field.Count; e++)
+                {
+                    int layer = field[e].Layer;
+                    if (layer < _buriedByLayer.Length)
+                    {
+                        _buriedByLayer[layer]++;
+                    }
+                }
+            }
         }
 
         /// <summary>Scatters embers chunk by chunk; same parameters always give the same mountain.</summary>
@@ -189,6 +238,9 @@ namespace Cinderbird.Terrain
                 _embers[i].AddRange(spawned);
                 BuriedEmberCount += spawned.Count;
             }
+
+            RecountBuried();
+            Array.Copy(_buriedByLayer, _initialByLayer, _buriedByLayer.Length);
         }
 
         /// <param name="center">World-local position (the terrain object's local space).</param>
@@ -218,6 +270,7 @@ namespace Cinderbird.Terrain
             Vector3 extent = Vector3.one * catchRadius;
             World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
             int emberCount = 0;
+            int firstNew = extractedEmbers.Count;
             for (int i = 0; i < _chunkScratch.Count; i++)
             {
                 int chunk = _chunkScratch[i];
@@ -227,6 +280,15 @@ namespace Cinderbird.Terrain
                     _embersChanged[chunk] = true;
                     _emberVersions[chunk]++;
                     emberCount += extracted;
+                }
+            }
+
+            for (int i = firstNew; i < extractedEmbers.Count; i++)
+            {
+                int layer = extractedEmbers[i].Layer;
+                if (layer < _buriedByLayer.Length)
+                {
+                    _buriedByLayer[layer]--;
                 }
             }
 

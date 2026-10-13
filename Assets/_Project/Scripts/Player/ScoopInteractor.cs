@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Cinderbird.Core;
 using Cinderbird.Embers;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
@@ -20,6 +21,8 @@ namespace Cinderbird.Player
         [SerializeField] private InputActionReference _scoopAction;
         [Tooltip("Layers the scoop ray can hit.")]
         [SerializeField] private LayerMask _hitMask = ~0;
+        [Tooltip("Optional: test mode can make the scoop bigger and drop its ash on the way.")]
+        [SerializeField] private TestModeSettings _testMode;
 
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
         private float[] _removedByLayer = System.Array.Empty<float>();
@@ -32,6 +35,8 @@ namespace Cinderbird.Player
 
         /// <summary>True when the view ray hits diggable ash within reach this frame.</summary>
         public bool HasTarget => _targetTerrain != null;
+
+        private float ScoopRadius => _settings.Radius * (_testMode != null ? _testMode.ScoopRadiusMultiplier : 1f);
 
         private void Awake()
         {
@@ -93,7 +98,7 @@ namespace Cinderbird.Player
                 _targetTerrain = terrain;
                 _targetSurfacePoint = hit.point;
                 // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
-                _targetCenter = hit.point + ray.direction * (_settings.Radius * _settings.Penetration);
+                _targetCenter = hit.point + ray.direction * (ScoopRadius * _settings.Penetration);
             }
         }
 
@@ -124,7 +129,7 @@ namespace Cinderbird.Player
             // The hole opens while the ash pours into the sieve, so the pile empties as the sieve fills.
             bool pours = _filler != null && _filler.isActiveAndEnabled;
             float carveSeconds = pours ? _filler.PourDuration : 0f;
-            DigResult result = _targetTerrain.Dig(_targetCenter, _settings.Radius, _extractedEmbers, removedByLayer,
+            DigResult result = _targetTerrain.Dig(_targetCenter, ScoopRadius, _extractedEmbers, removedByLayer,
                 _settings.EmberCatchMargin, carveSeconds);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
@@ -133,14 +138,17 @@ namespace Cinderbird.Player
 
             _targetTerrain.MixLayerColors(removedByLayer, out Color ashColor, out Color dustColor);
 
+            // Test mode can drop the ash on the way: the pile still loses it, but the sieve gets only the embers.
+            float ashIntoSieve = _testMode != null && _testMode.SkipShaking ? 0f : result.RemovedVolume;
+
             // The filler copies the embers, so the list can be reused for the next dig.
             if (pours)
             {
-                _filler.TryBegin(result.RemovedVolume, _extractedEmbers, _targetSurfacePoint, ashColor, dustColor);
+                _filler.TryBegin(ashIntoSieve, _extractedEmbers, _targetSurfacePoint, ashColor, dustColor);
                 return;
             }
 
-            contents.TryAdd(result.RemovedVolume, _extractedEmbers, ashColor, dustColor);
+            contents.TryAdd(ashIntoSieve, _extractedEmbers, ashColor, dustColor);
         }
 
         // Reused between digs; only reallocated if the terrain's layer count changes.

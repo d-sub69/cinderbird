@@ -82,6 +82,18 @@ namespace Cinderbird.Terrain
             return colors;
         }
 
+        /// <summary>Nest Heat level a layer needs to open; 0 for unknown layers.</summary>
+        public int UnlockHeatLevelOf(int layer)
+        {
+            return layer >= 0 && layer < _layers.Count && _layers[layer] != null ? _layers[layer].UnlockHeatLevel : 0;
+        }
+
+        /// <summary>Share of every layer above that must be cleared before a layer opens; 1 for unknown layers.</summary>
+        public float UnlockClearedShareOf(int layer)
+        {
+            return layer >= 0 && layer < _layers.Count && _layers[layer] != null ? _layers[layer].UnlockClearedShare : 1f;
+        }
+
         public string NameOf(int layer)
         {
             return layer >= 0 && layer < _layers.Count && _layers[layer] != null ? _layers[layer].DisplayName : $"Layer {layer + 1}";

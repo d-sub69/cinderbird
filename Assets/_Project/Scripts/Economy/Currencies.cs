@@ -16,6 +16,9 @@ namespace Cinderbird.Economy
 
         public int Heat { get; private set; }
 
+        /// <summary>True while <see cref="Restore"/> raises <see cref="Changed"/>: the change came from a save, not from play.</summary>
+        public bool IsRestoring { get; private set; }
+
         /// <summary>Adds both at once so listeners see one consistent change.</summary>
         public void Add(int glow, int heat)
         {
@@ -44,7 +47,16 @@ namespace Cinderbird.Economy
 
             Glow = glow;
             Heat = heat;
-            Changed?.Invoke();
+            IsRestoring = true;
+            try
+            {
+                Changed?.Invoke();
+            }
+            finally
+            {
+                IsRestoring = false;
+            }
+
             Restored?.Invoke();
         }
     }

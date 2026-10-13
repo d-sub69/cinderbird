@@ -24,3 +24,5 @@ MonoBehaviour:
   - 0
   - 0
   - 0
+  _unlockHeatLevel: 2
+  _unlockClearedShare: 0.9
