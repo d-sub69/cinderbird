@@ -19,6 +19,7 @@ namespace Cinderbird.Terrain
         // Chunks whose embers changed since generation; a dig can take embers without changing any sample.
         private readonly bool[] _embersChanged;
         private readonly int[] _emberVersions;
+        private AshPileShape? _shape;
         private readonly List<int> _chunkScratch = new List<int>();
 
         public AshTerrain(VoxelWorld world, int layerCount = 1)
@@ -53,9 +54,46 @@ namespace Cinderbird.Terrain
         public void Generate(AshPileShape shape, LayerLayout layout = null)
         {
             AshPileGenerator.Generate(World, shape, layout);
+            _shape = shape;
             TotalAshVolume = World.TotalAshVolume();
             World.MarkAllDirty();
             ClearModified();
+        }
+
+        /// <summary>
+        /// Height of the freshly generated surface over a sample column, in samples (the same units as
+        /// <see cref="VoxelWorld"/> sample indices); NaN before <see cref="Generate"/>. Settling uses it so the
+        /// mountain's own slopes count as stable even where they're steeper than loose ash would rest.
+        /// </summary>
+        public float NaturalSurfaceSample(int x, int z)
+        {
+            if (!_shape.HasValue)
+            {
+                return float.NaN;
+            }
+
+            Vector3 column = World.SamplePosition(x, 0, z);
+            float height = AshPileGenerator.SurfaceHeightAt(column.x, column.z, _shape.Value);
+            return (height - World.Origin.y) / World.CellSize;
+        }
+
+        /// <summary>Moves a buried ember to a new spot (e.g. carried by sliding ash), across chunks if needed.</summary>
+        /// <param name="fromChunk">The chunk whose list holds the ember now.</param>
+        /// <returns>The chunk now holding it, or -1 if it wasn't there (e.g. it was dug out meanwhile).</returns>
+        public int MoveEmber(int fromChunk, Ember from, Ember to)
+        {
+            if (!_embers[fromChunk].Remove(from))
+            {
+                return -1;
+            }
+
+            int toChunk = World.ChunkIndexAt(to.Position);
+            _embers[toChunk].Add(to);
+            _embersChanged[fromChunk] = true;
+            _embersChanged[toChunk] = true;
+            _emberVersions[fromChunk]++;
+            _emberVersions[toChunk]++;
+            return toChunk;
         }
 
         /// <summary>Whether a chunk's ash or embers changed since generation, i.e. whether a save needs it.</summary>

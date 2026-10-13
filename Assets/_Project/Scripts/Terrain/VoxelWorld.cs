@@ -155,6 +155,35 @@ namespace Cinderbird.Terrain
             }
         }
 
+        /// <summary>
+        /// Copies a whole vertical column of samples (densities and layers, SamplesY each) straight from the chunk
+        /// arrays: far cheaper than a GetDensity call per sample when a whole column is needed.
+        /// </summary>
+        public void CopyColumn(int x, int z, float[] densities, byte[] layers)
+        {
+            int cx = Math.Min(x / ChunkCells, ChunksX - 1);
+            int cz = Math.Min(z / ChunkCells, ChunksZ - 1);
+            int localX = x - cx * ChunkCells;
+            int localZ = z - cz * ChunkCells;
+            for (int cy = 0; cy < ChunksY; cy++)
+            {
+                VoxelGrid chunk = _chunks[ChunkIndex(cx, cy, cz)];
+                // Each chunk supplies its samples up to the next chunk's first; the last one also its top sample.
+                int count = cy == ChunksY - 1 ? ChunkCells + 1 : ChunkCells;
+                int first = cy * ChunkCells;
+                int index = chunk.Index(localX, 0, localZ);
+                int stride = chunk.SamplesX;
+                float[] chunkDensities = chunk.Densities;
+                byte[] chunkLayers = chunk.Layers;
+                for (int y = 0; y < count; y++)
+                {
+                    densities[first + y] = chunkDensities[index];
+                    layers[first + y] = chunkLayers[index];
+                    index += stride;
+                }
+            }
+        }
+
         /// <summary>Index of the chunk containing a local position, clamped to the world.</summary>
         public int ChunkIndexAt(Vector3 localPosition)
         {

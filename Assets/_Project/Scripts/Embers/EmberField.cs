@@ -37,6 +37,25 @@ namespace Cinderbird.Embers
             _embers.AddRange(embers);
         }
 
+        /// <summary>Removes one ember equal to <paramref name="ember"/> (same position, tier and layer).</summary>
+        /// <returns>False if no such ember is here (e.g. it was dug out meanwhile).</returns>
+        public bool Remove(Ember ember)
+        {
+            for (int i = _embers.Count - 1; i >= 0; i--)
+            {
+                Ember candidate = _embers[i];
+                if (candidate.Position.Equals(ember.Position) && candidate.TierIndex == ember.TierIndex && candidate.Layer == ember.Layer)
+                {
+                    int last = _embers.Count - 1;
+                    _embers[i] = _embers[last];
+                    _embers.RemoveAt(last);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>Swaps the contents for another set, e.g. the embers from a save.</summary>
         public void ReplaceWith(IReadOnlyList<Ember> embers)
         {

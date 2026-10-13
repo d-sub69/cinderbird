@@ -50,6 +50,12 @@ namespace Cinderbird.Terrain
             }
         }
 
+        /// <summary>Height of the freshly generated surface above a field-local x/z (0 outside the mound).</summary>
+        public static float SurfaceHeightAt(float x, float z, AshPileShape shape)
+        {
+            return SurfaceHeight(x, z, shape, shape.NoiseSeed * SeedSpacing);
+        }
+
         private static float SurfaceHeight(float x, float z, AshPileShape shape, float noiseOffset)
         {
             float distance = Mathf.Sqrt(x * x + z * z);
