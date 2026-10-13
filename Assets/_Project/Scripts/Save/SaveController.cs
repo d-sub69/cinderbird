@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
+using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
@@ -17,14 +18,11 @@ using UnityEngine.SceneManagement;
 namespace Cinderbird.Save
 {
     /// <summary>
-    /// Thin adapter between the game and its <see cref="SaveSlot"/>: loads the save at start, autosaves on a
+    /// Thin adapter between the game and its <see cref="SaveSlot"/>: loads the save when the bootstrap says so, autosaves on a
     /// timer, after feeding the nest and on quit, and handles the debug keys (F5 save, F9 reload the save,
     /// F8 delete it and start fresh). Saving copies the game state on the main thread (quick) and packs and
     /// writes it on a background thread, so autosaves don't stall a frame.
     /// </summary>
-    // Runs its Start after everyone else's, so the mountain, the nest's Heat goal and the tools are all set up
-    // before the save is applied on top.
-    [DefaultExecutionOrder(100)]
     public sealed class SaveController : MonoBehaviour
     {
         private static readonly ProfilerMarker CaptureMarker = new ProfilerMarker("Cinderbird.Save");
@@ -44,6 +42,8 @@ namespace Cinderbird.Save
         [SerializeField] private Basket _basket;
         [Tooltip("Every tool that can be set down in the world (the basket).")]
         [SerializeField] private PlaceableTool[] _placeableTools;
+        [Tooltip("Optional: autosave waits while the game is paused.")]
+        [SerializeField] private PauseController _pause;
 
         [Header("Debug keys")]
         [SerializeField] private InputActionReference _saveAction;
@@ -60,6 +60,8 @@ namespace Cinderbird.Save
         // Set when this session must not touch the save any more: it couldn't be read (so writing would
         // overwrite it), or the scene is about to reload.
         private bool _writesBlocked;
+        // Nothing is saved before the save has been loaded: that would overwrite it with a fresh mountain.
+        private bool _started;
 
         /// <summary>Short messages for the player: saved, loaded, problems.</summary>
         public event Action<string> Notice;
@@ -117,17 +119,21 @@ namespace Cinderbird.Save
             _nest.Fed -= OnFed;
         }
 
-        private void Start()
-        {
-            Debug.Log($"Save file: {SavePath}");
-            LoadAtStart();
-            _nextAutosaveTime = Time.unscaledTime + _settings.AutosaveInterval;
-        }
-
         private void Update()
         {
             CheckWriteFinished();
+            if (!_started)
+            {
+                return;
+            }
+
             HandleDebugKeys();
+
+            // Nothing changes while paused; a save that falls due then happens on resume.
+            if (_pause != null && _pause.IsPaused)
+            {
+                return;
+            }
 
             if (_settings.AutosaveInterval > 0f && Time.unscaledTime >= _nextAutosaveTime)
             {
@@ -144,7 +150,7 @@ namespace Cinderbird.Save
         // Also runs when Play mode stops in the Editor.
         private void OnApplicationQuit()
         {
-            if (_slot != null)
+            if (_slot != null && _started)
             {
                 SaveImmediately();
             }
@@ -177,11 +183,39 @@ namespace Cinderbird.Save
             }
             else if (WasPressed(_resetAction))
             {
-                WaitForWrite();
-                _slot.Delete();
-                Debug.Log("Save deleted; starting a fresh mountain.");
-                ReloadScene(false);
+                StartNewGame();
             }
+        }
+
+        /// <summary>Deletes the save and reloads the scene with a fresh mountain (F8, or New game in the menu).</summary>
+        public void StartNewGame()
+        {
+            if (_slot == null)
+            {
+                return;
+            }
+
+            WaitForWrite();
+            _slot.Delete();
+            Debug.Log("Save deleted; starting a fresh mountain.");
+            ReloadScene(false);
+        }
+
+        /// <summary>Saves right away (not in the background) and quits; in the Editor, Play mode stops.</summary>
+        public void SaveAndQuit()
+        {
+            if (_slot != null && _started)
+            {
+                SaveImmediately();
+            }
+
+            // Already saved; quitting must not write again.
+            _writesBlocked = true;
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private void ReloadScene(bool loadSave)
@@ -199,8 +233,20 @@ namespace Cinderbird.Save
             SceneManager.LoadScene(buildIndex);
         }
 
-        private void LoadAtStart()
+        /// <summary>
+        /// Applies the save on top of the freshly built mountain and starts autosaving. Called once by the
+        /// game's bootstrap, after the mountain is built.
+        /// </summary>
+        public void LoadAtStart()
         {
+            if (_slot == null || _started)
+            {
+                return;
+            }
+
+            _started = true;
+            Debug.Log($"Save file: {SavePath}");
+            _nextAutosaveTime = Time.unscaledTime + _settings.AutosaveInterval;
             bool forced = _loadOnNextStart;
             _loadOnNextStart = false;
             if (Application.isEditor && !_settings.LoadSaveInEditor && !forced)

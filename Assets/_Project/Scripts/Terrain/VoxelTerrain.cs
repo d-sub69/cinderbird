@@ -12,7 +12,7 @@ using Debug = UnityEngine.Debug;
 namespace Cinderbird.Terrain
 {
     /// <summary>
-    /// Thin adapter: builds the <see cref="AshTerrain"/> (mountain + embers) at start, creates one
+    /// Thin adapter: builds the <see cref="AshTerrain"/> (mountain + embers) when the bootstrap calls Build, creates one
     /// <see cref="VoxelChunkView"/> per chunk, and re-meshes only the chunks a dig touched.
     /// Keep the transform's scale at 1 so dig radii stay in meters.
     /// </summary>
@@ -80,7 +80,7 @@ namespace Cinderbird.Terrain
 
         public int LastMeshedChunkCount { get; private set; }
 
-        /// <summary>The terrain data; null until Awake has run.</summary>
+        /// <summary>The terrain data; null until <see cref="Build"/> has run.</summary>
         public AshTerrain Terrain => _terrain;
 
         public float TotalAshVolume => _terrain?.TotalAshVolume ?? 0f;
@@ -90,12 +90,28 @@ namespace Cinderbird.Terrain
         /// <summary>Local y of the ground the mountain sits on; <see cref="VoxelTerrainSettings.WorldOrigin"/> puts it at 0.</summary>
         public float LocalFloorHeight => 0f;
 
+        /// <summary>Fired once <see cref="Build"/> has generated and meshed the mountain.</summary>
+        public event Action Built;
+
+        public bool IsBuilt => _terrain != null;
+
         private void Awake()
         {
             if (_settings == null || _material == null)
             {
                 Debug.LogError($"{nameof(VoxelTerrain)} on '{name}' has unassigned references.", this);
                 enabled = false;
+            }
+        }
+
+        /// <summary>
+        /// Generates the mountain and its embers and meshes every chunk. Takes a second or two on the full
+        /// mountain, so the game's bootstrap calls it behind the loading screen. Runs once; later calls do nothing.
+        /// </summary>
+        public void Build()
+        {
+            if (IsBuilt || !enabled)
+            {
                 return;
             }
 
@@ -117,6 +133,7 @@ namespace Cinderbird.Terrain
 
             CreateViews();
             RebuildDirtyChunks();
+            Built?.Invoke();
         }
 
         private void OnDestroy()

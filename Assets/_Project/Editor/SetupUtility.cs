@@ -13,11 +13,11 @@ namespace Cinderbird.EditorTools
     /// </summary>
     internal static class SetupUtility
     {
-        public const string ScenePath = "Assets/_Project/Scenes/Prototype_Feel.unity";
+        public const string ScenePath = "Assets/_Project/Scenes/Main.unity";
         public const string InputActionsPath = "Assets/_Project/Settings/CinderbirdControls.inputactions";
 
-        /// <summary>Makes the prototype scene the open scene, asking to save other unsaved scenes first.</summary>
-        public static bool TryOpenPrototypeScene(out Scene scene)
+        /// <summary>Makes the game scene (Main) the open scene, asking to save other unsaved scenes first.</summary>
+        public static bool TryOpenMainScene(out Scene scene)
         {
             scene = default;
             if (EditorApplication.isPlayingOrWillChangePlaymode)

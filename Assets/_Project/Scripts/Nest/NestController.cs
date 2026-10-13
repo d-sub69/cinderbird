@@ -32,7 +32,7 @@ namespace Cinderbird.Nest
 
         public IEmberSink Sink => _intake;
 
-        /// <summary>Total Heat of every ember in the pile at start; 0 until Start has run.</summary>
+        /// <summary>Total Heat of every ember in the freshly built pile; 0 until the pile is built.</summary>
         public int HeatGoal { get; private set; }
 
         public float Progress => HeatGoal > 0 ? Mathf.Clamp01((float)_wallet.Currencies.Heat / HeatGoal) : 0f;
@@ -60,6 +60,11 @@ namespace Cinderbird.Nest
             if (_intake != null)
             {
                 _wallet.Currencies.Restored += OnCurrenciesRestored;
+                _pile.Built += OnPileBuilt;
+                if (_pile.IsBuilt && HeatGoal == 0)
+                {
+                    OnPileBuilt();
+                }
             }
         }
 
@@ -68,6 +73,7 @@ namespace Cinderbird.Nest
             if (_intake != null)
             {
                 _wallet.Currencies.Restored -= OnCurrenciesRestored;
+                _pile.Built -= OnPileBuilt;
             }
         }
 
@@ -76,15 +82,9 @@ namespace Cinderbird.Nest
             HeatRestored?.Invoke(_wallet.Currencies.Heat);
         }
 
-        // Start, not Awake: the pile spawns its embers in its own Awake. A save is applied after this
-        // (SaveController runs late), so the goal is always the fresh mountain's total.
-        private void Start()
+        // The bootstrap builds the mountain before it loads the save, so the goal is always the fresh mountain's total.
+        private void OnPileBuilt()
         {
-            if (_pile.Terrain == null)
-            {
-                return;
-            }
-
             // One-off at start; the mountain can hold tens of thousands of embers spread over many chunks.
             List<Ember> allEmbers = new List<Ember>();
             _pile.Terrain.CopyAllEmbers(allEmbers);

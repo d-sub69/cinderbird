@@ -79,7 +79,9 @@ namespace Cinderbird.UI
             _pile.Dug += OnDug;
             _pile.DigBlocked += OnDigBlocked;
             _pile.LayerUnlocked += OnLayerUnlocked;
-            _pile.Restored += OnPileRestored;
+            _pile.Restored += OnPileChanged;
+            _pile.Built += OnPileChanged;
+            OnPileChanged();
             if (_save != null)
             {
                 _save.Notice += ShowMessage;
@@ -90,13 +92,6 @@ namespace Cinderbird.UI
                 _scoop.ScoopRefused += OnScoopRefused;
             }
             _pourController.PourRefused += OnPourRefused;
-        }
-
-        // Start rather than OnEnable: the pile builds its grid in Awake, which may run after ours.
-        private void Start()
-        {
-            _pileVolume = _pile.TotalAshVolume;
-            _dirty = true;
         }
 
         private void OnDisable()
@@ -116,7 +111,8 @@ namespace Cinderbird.UI
             _pile.Dug -= OnDug;
             _pile.DigBlocked -= OnDigBlocked;
             _pile.LayerUnlocked -= OnLayerUnlocked;
-            _pile.Restored -= OnPileRestored;
+            _pile.Restored -= OnPileChanged;
+            _pile.Built -= OnPileChanged;
             if (_save != null)
             {
                 _save.Notice -= ShowMessage;
@@ -172,7 +168,8 @@ namespace Cinderbird.UI
             _dirty = true;
         }
 
-        private void OnPileRestored()
+        // Built, restored from a save: the totals jumped without a dig.
+        private void OnPileChanged()
         {
             _pileVolume = _pile.TotalAshVolume;
             _dirty = true;

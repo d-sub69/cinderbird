@@ -58,6 +58,12 @@ namespace Cinderbird.Embers
             if (_visuals != null)
             {
                 _terrain.Dug += OnDug;
+                _terrain.Built += OnTerrainBuilt;
+                _terrain.Restored += OnTerrainBuilt;
+                if (_terrain.IsBuilt)
+                {
+                    OnTerrainBuilt();
+                }
             }
         }
 
@@ -66,11 +72,13 @@ namespace Cinderbird.Embers
             if (_visuals != null)
             {
                 _terrain.Dug -= OnDug;
+                _terrain.Built -= OnTerrainBuilt;
+                _terrain.Restored -= OnTerrainBuilt;
             }
         }
 
-        // Start, not Awake: the terrain builds the mountain and its embers in its own Awake.
-        private void Start()
+        // Also after a save is restored: whole chunks of ash and embers changed at once.
+        private void OnTerrainBuilt()
         {
             AshTerrain terrain = _terrain.Terrain;
             if (terrain == null)

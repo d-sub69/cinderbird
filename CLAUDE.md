@@ -38,7 +38,7 @@ Packages approved for 1B: Mathematics (new), Burst and Collections (already pres
 ```
 Assets/
   _Project/
-    Scenes/            Prototype_Feel.unity, later Main.unity
+    Scenes/            Main.unity (the game; start-up runs through Core/GameBootstrap)
     Scripts/
       Core/            bootstrapping, service wiring, shared utilities
       Player/          controller, camera, interaction

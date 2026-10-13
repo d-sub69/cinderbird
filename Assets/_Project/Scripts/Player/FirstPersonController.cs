@@ -108,8 +108,6 @@ namespace Cinderbird.Player
             EnableOptional(_suspendLookAction);
             EnableOptional(_sprintAction);
             EnableOptional(_crouchAction);
-
-            SetCursorLocked(true);
         }
 
         private void OnDisable()
@@ -122,12 +120,11 @@ namespace Cinderbird.Player
             _moveAction.action.Disable();
             _lookAction.action.Disable();
             _jumpAction.action.Disable();
-            SetCursorLocked(false);
         }
 
+        // The cursor belongs to the PauseController: locked while playing, free while loading or paused.
         private void Update()
         {
-            UpdateCursorLock();
             UpdateLook();
             UpdateCrouch();
             UpdateMovement();
@@ -183,7 +180,8 @@ namespace Cinderbird.Player
 
         private void UpdateMovement()
         {
-            if (_jumpAction.action.WasPressedThisFrame())
+            // A jump pressed in the pause menu would otherwise wait, buffered, and fire on resume.
+            if (Cursor.lockState == CursorLockMode.Locked && _jumpAction.action.WasPressedThisFrame())
             {
                 _motor.RequestJump();
             }
@@ -214,28 +212,6 @@ namespace Cinderbird.Player
             {
                 action.action.Enable();
             }
-        }
-
-        // Debug-level cursor handling; a proper pause menu will replace this later.
-        private static void UpdateCursorLock()
-        {
-            Keyboard keyboard = Keyboard.current;
-            Mouse mouse = Mouse.current;
-
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
-            {
-                SetCursorLocked(false);
-            }
-            else if (Cursor.lockState != CursorLockMode.Locked && mouse != null && mouse.leftButton.wasPressedThisFrame)
-            {
-                SetCursorLocked(true);
-            }
-        }
-
-        private static void SetCursorLocked(bool locked)
-        {
-            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !locked;
         }
     }
 }
