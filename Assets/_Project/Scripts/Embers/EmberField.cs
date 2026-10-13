@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Cinderbird.Terrain;
 using UnityEngine;
 
 namespace Cinderbird.Embers
@@ -42,6 +43,12 @@ namespace Cinderbird.Embers
         /// <returns>How many embers were extracted.</returns>
         public int ExtractWithin(Vector3 center, float radius, List<Ember> output)
         {
+            return ExtractWithin(center, radius, output, null);
+        }
+
+        /// <param name="locks">Embers in a locked layer stay buried; null takes everything.</param>
+        public int ExtractWithin(Vector3 center, float radius, List<Ember> output, LayerLocks locks)
+        {
             float radiusSquared = radius * radius;
             int extracted = 0;
 
@@ -50,6 +57,11 @@ namespace Cinderbird.Embers
             {
                 Ember ember = _embers[i];
                 if ((ember.Position - center).sqrMagnitude > radiusSquared)
+                {
+                    continue;
+                }
+
+                if (locks != null && !locks.IsUnlocked(ember.Layer))
                 {
                     continue;
                 }

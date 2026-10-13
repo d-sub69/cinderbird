@@ -115,6 +115,46 @@ namespace Cinderbird.Terrain
             }
         }
 
+        public byte GetLayer(int x, int y, int z)
+        {
+            int cx = Math.Min(x / ChunkCells, ChunksX - 1);
+            int cy = Math.Min(y / ChunkCells, ChunksY - 1);
+            int cz = Math.Min(z / ChunkCells, ChunksZ - 1);
+            return _chunks[ChunkIndex(cx, cy, cz)].GetLayer(x - cx * ChunkCells, y - cy * ChunkCells, z - cz * ChunkCells);
+        }
+
+        /// <summary>Writes the layer into every chunk that holds a copy of the sample, like <see cref="SetDensity"/>.</summary>
+        public void SetLayer(int x, int y, int z, byte layer)
+        {
+            int countX = ChunksHolding(x, ChunksX, out int firstX);
+            int countY = ChunksHolding(y, ChunksY, out int firstY);
+            int countZ = ChunksHolding(z, ChunksZ, out int firstZ);
+
+            for (int cz = firstZ; cz < firstZ + countZ; cz++)
+            {
+                for (int cy = firstY; cy < firstY + countY; cy++)
+                {
+                    for (int cx = firstX; cx < firstX + countX; cx++)
+                    {
+                        int index = ChunkIndex(cx, cy, cz);
+                        _chunks[index].SetLayer(x - cx * ChunkCells, y - cy * ChunkCells, z - cz * ChunkCells, layer);
+                        _dirty[index] = true;
+                    }
+                }
+            }
+        }
+
+        /// <summary>Index of the chunk containing a local position, clamped to the world.</summary>
+        public int ChunkIndexAt(Vector3 localPosition)
+        {
+            float chunkSize = ChunkCells * CellSize;
+            Vector3 relative = localPosition - Origin;
+            int x = Mathf.Clamp(Mathf.FloorToInt(relative.x / chunkSize), 0, ChunksX - 1);
+            int y = Mathf.Clamp(Mathf.FloorToInt(relative.y / chunkSize), 0, ChunksY - 1);
+            int z = Mathf.Clamp(Mathf.FloorToInt(relative.z / chunkSize), 0, ChunksZ - 1);
+            return ChunkIndex(x, y, z);
+        }
+
         /// <summary>Only the world's outer border; chunk seams are ordinary samples.</summary>
         public bool IsBoundary(int x, int y, int z)
         {

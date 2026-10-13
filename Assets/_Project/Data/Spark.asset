@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ed5f5f24e035c714e8e40ed1c4c0f817, type: 3}
-  m_Name: Flame Heart
+  m_Name: Spark
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Embers.EmberTier
-  _displayName: Cinder
-  _color: {r: 1, g: 0.9019608, b: 0.15686275, a: 1}
-  _emissionIntensity: 12
-  _visualScale: 0.05
-  _glowValue: 25
-  _heatValue: 10
-  _spawnWeight: 2
+  _displayName: Spark
+  _color: {r: 0.75, g: 0.2, b: 0.1, a: 1}
+  _emissionIntensity: 2.5
+  _visualScale: 0.03
+  _glowValue: 1
+  _heatValue: 1
+  _spawnWeight: 80

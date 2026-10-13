@@ -24,7 +24,11 @@ namespace Cinderbird.Sifting
         [Tooltip("Optional dust burst at the dig spot; emission is triggered from code.")]
         [SerializeField] private ParticleSystem _digPuff;
 
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
         private Transform[] _clumps;
+        private Renderer[] _clumpRenderers;
+        private MaterialPropertyBlock _propertyBlock;
         private Vector3[] _fromPositions;
         private Vector3[] _landingOffsets;
         private float[] _startTimes;
@@ -41,6 +45,7 @@ namespace Cinderbird.Sifting
                 return;
             }
 
+            _propertyBlock = new MaterialPropertyBlock();
             CreatePool(_settings.MaxClumps);
         }
 
@@ -98,6 +103,7 @@ namespace Cinderbird.Sifting
             // World-space container: clumps must not move with the sieve once they've left the pile.
             Transform container = new GameObject("Ash Clumps").transform;
             _clumps = new Transform[count];
+            _clumpRenderers = new Renderer[count];
             _fromPositions = new Vector3[count];
             _landingOffsets = new Vector3[count];
             _startTimes = new float[count];
@@ -108,6 +114,7 @@ namespace Cinderbird.Sifting
                 clump.name = $"Ash Clump {i}";
                 clump.gameObject.SetActive(false);
                 _clumps[i] = clump.transform;
+                _clumpRenderers[i] = clump;
             }
         }
 
@@ -121,6 +128,8 @@ namespace Cinderbird.Sifting
             float staggerWindow = Mathf.Max(0f, _settings.FillDuration - _flightTime);
             float now = Time.time;
             float landingRadius = _settings.Radius * LandingSpreadFraction;
+            // Clumps are made of the ash being scooped, so they share the load's layer color.
+            _propertyBlock.SetColor(BaseColorId, _filler.IncomingAshColor);
 
             for (int i = 0; i < _activeCount; i++)
             {
@@ -129,6 +138,7 @@ namespace Cinderbird.Sifting
                 Vector2 landing = RandomInDisc(landingRadius);
                 _landingOffsets[i] = new Vector3(landing.x, 0f, landing.y);
                 _clumps[i].localScale = Vector3.one * (_settings.ClumpSize * Mathf.Lerp(0.7f, 1.3f, (float)_random.NextDouble()));
+                _clumpRenderers[i].SetPropertyBlock(_propertyBlock);
             }
 
             PuffDust(digPoint);
@@ -169,7 +179,9 @@ namespace Cinderbird.Sifting
             }
 
             _digPuff.transform.position = digPoint;
-            _digPuff.Emit(_settings.DigPuffParticles);
+            // Only the color is overridden; position and everything else still come from the particle system.
+            ParticleSystem.EmitParams emit = new ParticleSystem.EmitParams { startColor = _filler.IncomingDustColor };
+            _digPuff.Emit(emit, _settings.DigPuffParticles);
         }
 
         private void HideAll()

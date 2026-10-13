@@ -175,6 +175,16 @@
                     "interactions": "",
                     "initialStateCheck": false,
                     "priority": 0
+                },
+                {
+                    "name": "UnlockNextLayer",
+                    "type": "Button",
+                    "id": "1bfff146-8128-4bc5-89e5-e15166702ab8",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
                 }
             ],
             "bindings": [
@@ -582,6 +592,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "TogglePerformance",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b34dd1ec-0e3a-4430-a82a-124c0ba8a75a",
+                    "path": "<Keyboard>/f4",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "UnlockNextLayer",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

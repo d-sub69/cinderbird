@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed5f5f24e035c714e8e40ed1c4c0f817, type: 3}
   m_Name: Ember
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Embers.EmberTier
-  _displayName: Cinder
-  _color: {r: 1, g: 0.5882353, b: 0.15686275, a: 1}
-  _emissionIntensity: 6
-  _visualScale: 0.04
+  _displayName: Ember
+  _color: {r: 1, g: 0.43, b: 0.12, a: 1}
+  _emissionIntensity: 4
+  _visualScale: 0.035
   _glowValue: 5
   _heatValue: 3
   _spawnWeight: 18

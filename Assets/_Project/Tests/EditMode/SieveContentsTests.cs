@@ -186,6 +186,56 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void EmberCapacity_Reached_StopsScooping()
+        {
+            SieveContents sieve = new SieveContents { EmberCapacity = 3 };
+            sieve.TryAdd(0f, Embers(2));
+            Assert.That(sieve.CanScoop, Is.True);
+
+            sieve.TryAdd(0f, Embers(1));
+
+            Assert.That(sieve.IsFullOfEmbers, Is.True);
+            Assert.That(sieve.CanScoop, Is.False);
+        }
+
+        [Test]
+        public void EmberCapacity_ALoadAlreadyOnItsWay_IsStillAccepted()
+        {
+            // The limit is checked before digging; a load that's pouring in must never be lost.
+            SieveContents sieve = new SieveContents { EmberCapacity = 2 };
+            sieve.TryAdd(0f, Embers(2));
+
+            bool added = sieve.TryAdd(0.1f, Embers(1));
+
+            Assert.That(added, Is.True);
+            Assert.That(sieve.EmberCount, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void PouringOut_FreesCapacity()
+        {
+            SieveContents sieve = new SieveContents { EmberCapacity = 2 };
+            sieve.TryAdd(0f, Embers(2));
+
+            sieve.TakeNewest(1, new List<Ember>());
+
+            Assert.That(sieve.CanScoop, Is.True);
+        }
+
+        [Test]
+        public void TryAdd_KeepsTheLoadsColors()
+        {
+            SieveContents sieve = new SieveContents();
+            Color ash = new Color(0.6f, 0.3f, 0.2f, 1f);
+            Color dust = new Color(0.9f, 0.7f, 0.6f, 0.8f);
+
+            sieve.TryAdd(0.1f, Embers(0), ash, dust);
+
+            Assert.That(sieve.AshColor, Is.EqualTo(ash));
+            Assert.That(sieve.DustColor, Is.EqualTo(dust));
+        }
+
+        [Test]
         public void TryAdd_NegativeAsh_Throws()
         {
             SieveContents sieve = new SieveContents();

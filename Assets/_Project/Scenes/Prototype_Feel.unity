@@ -172,6 +172,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c435010740fa3df4487c6bdb047a1aab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Sifting.Sieve
+  _settings: {fileID: 11400000, guid: 08ca2898637c68c4c9785752922998fe, type: 2}
 --- !u!114 &3195222
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -224,6 +225,7 @@ MonoBehaviour:
   _controller: {fileID: 3195223}
   _settings: {fileID: 11400000, guid: c128593f61c1e2a488bb09f717c31772, type: 2}
   _dust: {fileID: 1693319345}
+  _sieve: {fileID: 3195221}
 --- !u!114 &3195225
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -811,6 +813,7 @@ GameObject:
   - component: {fileID: 273172399}
   - component: {fileID: 273172400}
   - component: {fileID: 273172401}
+  - component: {fileID: 273172402}
   m_Layer: 0
   m_Name: AshPile
   m_TagString: Untagged
@@ -864,8 +867,22 @@ MonoBehaviour:
   _settings: {fileID: 11400000, guid: 3d648f88d33b3ff4a8fa6581a331eda2, type: 2}
   _emberSpawnSettings: {fileID: 11400000, guid: 569cfd85c66f8604d94848cfbf4e8bd7, type: 2}
   _tierCatalog: {fileID: 11400000, guid: d4be10cff6273e548820db03d0c2bdd1, type: 2}
-  _material: {fileID: 2100000, guid: 21404417ba8baae4c9ac175a91dc7517, type: 2}
+  _layerCatalog: {fileID: 11400000, guid: f9d8e2bbd064f7044ae59a1b378b03bc, type: 2}
+  _material: {fileID: 2100000, guid: fba8bfb7cf3b2634688e18d7b3fcf50d, type: 2}
   _showEmberGizmos: 0
+--- !u!114 &273172402
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 273172394}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a1cae39574a83940b330841c27c7b35, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Terrain.DebugLayerUnlocker
+  _unlockAction: {fileID: 8283047670827702452, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
 --- !u!1 &275120275
 GameObject:
   m_ObjectHideFlags: 0
@@ -1776,7 +1793,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 3657433087
   m_fontColor: {r: 1, g: 1, b: 1, a: 0.85}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -1789,7 +1806,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -8372,6 +8389,7 @@ MonoBehaviour:
   _sieve: {fileID: 3195221}
   _shakeController: {fileID: 3195223}
   _pourController: {fileID: 1069582116}
+  _scoop: {fileID: 1069582112}
   _interactor: {fileID: 1069582115}
   _toolBelt: {fileID: 1069582114}
   _placement: {fileID: 1069582117}

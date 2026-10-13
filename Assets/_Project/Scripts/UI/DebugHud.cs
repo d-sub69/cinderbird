@@ -26,6 +26,8 @@ namespace Cinderbird.UI
         [SerializeField] private Sieve _sieve;
         [SerializeField] private SieveShakeController _shakeController;
         [SerializeField] private PourController _pourController;
+        [Tooltip("Optional: shows why a scoop was refused.")]
+        [SerializeField] private ScoopInteractor _scoop;
         [SerializeField] private PlayerInteractor _interactor;
         [SerializeField] private ToolBelt _toolBelt;
         [SerializeField] private ToolPlacementController _placement;
@@ -72,7 +74,13 @@ namespace Cinderbird.UI
             _placement.StateChanged += OnPromptChanged;
             _placement.PickUpRefused += OnPickUpRefused;
             _pile.Dug += OnDug;
+            _pile.DigBlocked += OnDigBlocked;
+            _pile.LayerUnlocked += OnLayerUnlocked;
             _pourController.Poured += OnPoured;
+            if (_scoop != null)
+            {
+                _scoop.ScoopRefused += OnScoopRefused;
+            }
             _pourController.PourRefused += OnPourRefused;
         }
 
@@ -98,7 +106,13 @@ namespace Cinderbird.UI
             _placement.StateChanged -= OnPromptChanged;
             _placement.PickUpRefused -= OnPickUpRefused;
             _pile.Dug -= OnDug;
+            _pile.DigBlocked -= OnDigBlocked;
+            _pile.LayerUnlocked -= OnLayerUnlocked;
             _pourController.Poured -= OnPoured;
+            if (_scoop != null)
+            {
+                _scoop.ScoopRefused -= OnScoopRefused;
+            }
             _pourController.PourRefused -= OnPourRefused;
         }
 
@@ -128,6 +142,16 @@ namespace Cinderbird.UI
             _dirty = true;
         }
 
+        private void OnDigBlocked(int layer)
+        {
+            ShowMessage($"The {_pile.LayerName(layer)} is still sealed");
+        }
+
+        private void OnLayerUnlocked(int layer)
+        {
+            ShowMessage($"The {_pile.LayerName(layer)} is open (debug unlock)");
+        }
+
         private void OnDug(DigResult result, Vector3 center, float radius)
         {
             // Read on dig only: it changes only then.
@@ -140,6 +164,19 @@ namespace Cinderbird.UI
             _dirty = true;
             // The prompt should appear as you look at something, not up to one refresh interval later.
             _nextRefreshTime = 0f;
+        }
+
+        private void OnScoopRefused(ScoopRefusal reason)
+        {
+            switch (reason)
+            {
+                case ScoopRefusal.AshInSieve:
+                    ShowMessage("Shake out the ash first");
+                    break;
+                case ScoopRefusal.SieveFullOfEmbers:
+                    ShowMessage("The sieve is full of embers: pour them into the basket or the nest");
+                    break;
+            }
         }
 
         private void OnPickUpRefused(PlaceableTool tool)
@@ -197,7 +234,14 @@ namespace Cinderbird.UI
             _builder.Clear();
 
             _builder.Append("Sieve: ").Append((sieve.AshVolume * 1000f).ToString("F0")).Append(" L ash");
-            _builder.Append(sieve.CanScoop ? "" : "  (shake before scooping)");
+            if (sieve.HasAsh)
+            {
+                _builder.Append("  (shake before scooping)");
+            }
+            else if (sieve.IsFullOfEmbers)
+            {
+                _builder.Append("  (full of embers)");
+            }
             if (_shownEnergy > 0f)
             {
                 _builder.Append("  Shaking ").Append(Mathf.RoundToInt(_shownEnergy * 100f)).Append('%');
@@ -212,6 +256,10 @@ namespace Cinderbird.UI
             else
             {
                 _builder.Append("Embers in sieve: ").Append(sieve.Embers.Count);
+                if (sieve.EmberCapacity < int.MaxValue)
+                {
+                    _builder.Append('/').Append(sieve.EmberCapacity);
+                }
                 AppendTierBreakdown(sieve.Embers);
             }
 
@@ -223,7 +271,8 @@ namespace Cinderbird.UI
             _builder.AppendLine();
 
             _builder.Append("Pile: ").Append(_pileVolume.ToString("F2")).Append(" m³, ")
-                .Append(_pile.BuriedEmberCount).Append(" embers buried");
+                .Append(_pile.BuriedEmberCount).Append(" embers buried, open down to the ")
+                .Append(_pile.LayerName(_pile.DeepestUnlockedLayer));
             _builder.AppendLine();
 
             Currencies currencies = _wallet.Currencies;

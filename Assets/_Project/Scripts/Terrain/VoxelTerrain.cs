@@ -20,7 +20,9 @@ namespace Cinderbird.Terrain
         [SerializeField] private VoxelTerrainSettings _settings;
         [SerializeField] private EmberSpawnSettings _emberSpawnSettings;
         [SerializeField] private EmberTierCatalog _tierCatalog;
-        [Tooltip("Material for the ash surface.")]
+        [Tooltip("Optional: ash layers (depth bands, ember tables, tints). Without it the mountain is one layer.")]
+        [SerializeField] private LayerCatalog _layerCatalog;
+        [Tooltip("Material for the ash surface; it should show vertex colors so the layer tints appear.")]
         [SerializeField] private Material _material;
 
         [Header("Debug")]
@@ -38,11 +40,27 @@ namespace Cinderbird.Terrain
         private readonly List<int> _bakedChunks = new List<int>();
         private readonly List<int> _batchChunks = new List<int>();
 
+        // Used when there's no layer catalog: plain grey ash, light dust.
+        private static readonly Color DefaultAshColor = new Color(0.55f, 0.55f, 0.55f, 1f);
+        private static readonly Color DefaultDustColor = new Color(0.78f, 0.76f, 0.74f, 0.8f);
+
+        private Color[] _ashColors;
+        private Color[] _dustColors;
+
         // Enough to keep all worker threads busy; a dig touches at most 8 chunks, so only start-up is split.
         private const int MeshBatchSize = 32;
 
         /// <summary>Fired after a dig with what it removed and the dug sphere (local center, radius).</summary>
         public event Action<DigResult, Vector3, float> Dug;
+
+        /// <summary>Fired when a dig removed nothing because it hit a locked layer (the layer index).</summary>
+        public event Action<int> DigBlocked;
+
+        /// <summary>Fired when a layer opens for digging (the layer index).</summary>
+        public event Action<int> LayerUnlocked;
+
+        /// <summary>The deepest ash layer that can be dug right now.</summary>
+        public int DeepestUnlockedLayer => _terrain?.Locks.DeepestUnlocked ?? 0;
 
         /// <summary>Milliseconds the last dig took in total, including re-meshing; for the performance overlay.</summary>
         public float LastDigMilliseconds { get; private set; }
@@ -74,10 +92,18 @@ namespace Cinderbird.Terrain
             VoxelWorld world = new VoxelWorld(
                 _settings.ChunkCells, _settings.ChunksX, _settings.ChunksY, _settings.ChunksZ,
                 _settings.CellSize, _settings.WorldOrigin);
-            _terrain = new AshTerrain(world);
-            _terrain.Generate(_settings.PileShape);
+            int layerCount = _layerCatalog != null ? Math.Max(1, _layerCatalog.Count) : 1;
+            _terrain = new AshTerrain(world, layerCount);
+            _terrain.Generate(_settings.PileShape, _layerCatalog != null ? _layerCatalog.CreateLayout() : null);
             SpawnEmbers();
             _mesher = new MarchingCubes();
+            if (_layerCatalog != null)
+            {
+                _ashColors = _layerCatalog.CreateTints();
+                _dustColors = _layerCatalog.CreateDustColors();
+                _mesher.SetLayerTints(_ashColors);
+            }
+
             CreateViews();
             RebuildDirtyChunks();
         }
@@ -90,7 +116,8 @@ namespace Cinderbird.Terrain
         /// <summary>
         /// Carves a sphere at a world position. Embers inside it are appended to <paramref name="extractedEmbers"/>.
         /// </summary>
-        public DigResult Dig(Vector3 worldCenter, float radius, List<Ember> extractedEmbers)
+        /// <param name="removedByLayer">If given (length <see cref="LayerCount"/>), cubic meters taken per layer are added to it.</param>
+        public DigResult Dig(Vector3 worldCenter, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null)
         {
             if (_terrain == null)
             {
@@ -101,9 +128,14 @@ namespace Cinderbird.Terrain
             {
                 long started = Stopwatch.GetTimestamp();
                 Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
-                DigResult result = _terrain.Dig(localCenter, radius, extractedEmbers);
+                DigResult result = _terrain.Dig(localCenter, radius, extractedEmbers, removedByLayer);
                 if (!result.RemovedAnyAsh && result.EmberCount == 0)
                 {
+                    if (result.WasBlocked)
+                    {
+                        DigBlocked?.Invoke(result.BlockedLayer);
+                    }
+
                     return result;
                 }
 
@@ -114,11 +146,58 @@ namespace Cinderbird.Terrain
             }
         }
 
+        /// <summary>Opens the next ash layer for digging (debug key for now; Heat levels in the full game).</summary>
+        /// <returns>The layer that opened, or -1 if all are open.</returns>
+        public int UnlockNextLayer()
+        {
+            int layer = _terrain != null ? _terrain.Locks.UnlockNext() : -1;
+            if (layer >= 0)
+            {
+                LayerUnlocked?.Invoke(layer);
+            }
+
+            return layer;
+        }
+
+        public int LayerCount => _terrain?.Locks.Count ?? 1;
+
+        /// <summary>The ash and dust colors of a dug load, blended by how much came from each layer.</summary>
+        public void MixLayerColors(float[] removedByLayer, out Color ashColor, out Color dustColor)
+        {
+            if (_ashColors == null || removedByLayer == null)
+            {
+                ashColor = DefaultAshColor;
+                dustColor = DefaultDustColor;
+                return;
+            }
+
+            ashColor = LayerColorMix.Blend(removedByLayer, _ashColors, DefaultAshColor);
+            dustColor = LayerColorMix.Blend(removedByLayer, _dustColors, DefaultDustColor);
+        }
+
+        public string LayerName(int layer)
+        {
+            return _layerCatalog != null ? _layerCatalog.NameOf(layer) : $"Layer {layer + 1}";
+        }
+
         private void SpawnEmbers()
         {
             if (_emberSpawnSettings == null || _tierCatalog == null)
             {
                 Debug.LogWarning($"{nameof(VoxelTerrain)} on '{name}' has no ember settings; the mountain will be empty.", this);
+                return;
+            }
+
+            if (_layerCatalog != null)
+            {
+                EmberSpawnParameters parameters = _emberSpawnSettings.ToParameters();
+                _terrain.SpawnLayeredEmbers(_layerCatalog.CreateSpawnTable(_tierCatalog.Count), parameters.Seed, parameters.MinDensity);
+                // Exactly one Heart Ember, at the center of the innermost pocket.
+                if (_layerCatalog.Count > 1)
+                {
+                    _terrain.PlaceEmber(new Ember(_layerCatalog.PocketCenter, _layerCatalog.HeartTierIndex, (byte)(_layerCatalog.Count - 1)));
+                }
+
                 return;
             }
 
@@ -171,7 +250,7 @@ namespace Cinderbird.Terrain
                     _mesher.PolygonizeChunks(_terrain.World, _batchChunks);
                     for (int i = 0; i < _batchChunks.Count; i++)
                     {
-                        _views[_batchChunks[i]].Apply(_mesher.ResultVertices(i), _mesher.ResultNormals(i), _mesher.ResultIndices(i));
+                        _views[_batchChunks[i]].Apply(_mesher.ResultVertices(i), _mesher.ResultNormals(i), _mesher.ResultColors(i), _mesher.ResultIndices(i));
                     }
 
                     _mesher.ReleaseResults();

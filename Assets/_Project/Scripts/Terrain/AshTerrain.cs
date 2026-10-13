@@ -17,9 +17,10 @@ namespace Cinderbird.Terrain
         private readonly EmberField[] _embers;
         private readonly List<int> _chunkScratch = new List<int>();
 
-        public AshTerrain(VoxelWorld world)
+        public AshTerrain(VoxelWorld world, int layerCount = 1)
         {
             World = world;
+            Locks = new LayerLocks(layerCount);
             _embers = new EmberField[world.ChunkCount];
             for (int i = 0; i < _embers.Length; i++)
             {
@@ -28,6 +29,9 @@ namespace Cinderbird.Terrain
         }
 
         public VoxelWorld World { get; }
+
+        /// <summary>Which ash layers can be dug; only the outermost starts open.</summary>
+        public LayerLocks Locks { get; }
 
         /// <summary>Cubic meters of ash left; updated on every dig.</summary>
         public float TotalAshVolume { get; private set; }
@@ -39,11 +43,33 @@ namespace Cinderbird.Terrain
             return _embers[chunkIndex];
         }
 
-        public void Generate(AshPileShape shape)
+        /// <param name="layout">Assigns ash layers by depth; null leaves everything in layer 0.</param>
+        public void Generate(AshPileShape shape, LayerLayout layout = null)
         {
-            AshPileGenerator.Generate(World, shape);
+            AshPileGenerator.Generate(World, shape, layout);
             TotalAshVolume = World.TotalAshVolume();
             World.MarkAllDirty();
+        }
+
+        /// <summary>Scatters embers chunk by chunk using each ash layer's own rate and tiers.</summary>
+        public void SpawnLayeredEmbers(LayerSpawnTable table, int seed, float minDensity)
+        {
+            List<Ember> spawned = new List<Ember>();
+            BuriedEmberCount = 0;
+            for (int i = 0; i < _embers.Length; i++)
+            {
+                spawned.Clear();
+                EmberSpawner.SpawnLayered(World.GetChunk(i), table, seed * ChunkSeedStride + i, minDensity, spawned);
+                _embers[i].AddRange(spawned);
+                BuriedEmberCount += spawned.Count;
+            }
+        }
+
+        /// <summary>Buries one specific ember (e.g. the single Heart Ember) where it says.</summary>
+        public void PlaceEmber(Ember ember)
+        {
+            _embers[World.ChunkIndexAt(ember.Position)].Add(ember);
+            BuriedEmberCount++;
         }
 
         /// <summary>Scatters embers chunk by chunk; same parameters always give the same mountain.</summary>
@@ -64,21 +90,22 @@ namespace Cinderbird.Terrain
 
         /// <param name="center">World-local position (the terrain object's local space).</param>
         /// <param name="extractedEmbers">Embers inside the sphere are appended here.</param>
-        public DigResult Dig(Vector3 center, float radius, List<Ember> extractedEmbers)
+        /// <param name="removedByLayer">If given, cubic meters taken from each layer are added to it.</param>
+        public DigResult Dig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null)
         {
-            DigResult carve = SphereDigBrush.Dig(World, center, radius);
+            DigResult carve = SphereDigBrush.Dig(World, center, radius, Locks, removedByLayer);
 
             Vector3 extent = Vector3.one * radius;
             World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
             int emberCount = 0;
             for (int i = 0; i < _chunkScratch.Count; i++)
             {
-                emberCount += _embers[_chunkScratch[i]].ExtractWithin(center, radius, extractedEmbers);
+                emberCount += _embers[_chunkScratch[i]].ExtractWithin(center, radius, extractedEmbers, Locks);
             }
 
             TotalAshVolume -= carve.RemovedVolume;
             BuriedEmberCount -= emberCount;
-            return new DigResult(carve.RemovedVolume, emberCount);
+            return new DigResult(carve.RemovedVolume, emberCount, carve.BlockedLayer);
         }
 
         public void CopyAllEmbers(List<Ember> output)

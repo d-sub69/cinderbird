@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed5f5f24e035c714e8e40ed1c4c0f817, type: 3}
+  m_Name: Starfire
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Embers.EmberTier
+  _displayName: Starfire
+  _color: {r: 0.32, g: 0.55, b: 1, a: 1}
+  _emissionIntensity: 10
+  _visualScale: 0.05
+  _glowValue: 500
+  _heatValue: 100
+  _spawnWeight: 0

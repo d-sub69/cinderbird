@@ -31,11 +31,13 @@ namespace Cinderbird.Terrain
         }
 
         /// <summary>Uploads a freshly meshed chunk. Call <see cref="RefreshCollider"/> once its collision is baked.</summary>
-        public void Apply(NativeArray<float3> vertices, NativeArray<float3> normals, NativeArray<int> indices)
+        public void Apply(NativeArray<float3> vertices, NativeArray<float3> normals, NativeArray<float4> colors, NativeArray<int> indices)
         {
             _mesh.Clear();
             _mesh.SetVertices(vertices);
             _mesh.SetNormals(normals);
+            // Layer tints; the ash material uses a shader that multiplies by vertex color.
+            _mesh.SetColors(colors);
             _mesh.SetIndices(indices, MeshTopology.Triangles, 0);
             HasTriangles = indices.Length > 0;
         }

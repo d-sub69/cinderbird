@@ -45,6 +45,8 @@ namespace Cinderbird.Sifting
         private bool _anyGlimmer;
         private float _minCoverHeight;
         private MaterialPropertyBlock _propertyBlock;
+        private MaterialPropertyBlock _ashBlock;
+        private Renderer _ashRenderer;
 
         private void Awake()
         {
@@ -66,6 +68,8 @@ namespace Cinderbird.Sifting
                 this);
             _minCoverHeight = LargestEmberSize() * EmberTopPerSize * CoverMargin;
             _propertyBlock = new MaterialPropertyBlock();
+            _ashBlock = new MaterialPropertyBlock();
+            _ashRenderer = _ashDisc.GetComponent<Renderer>();
             CreateGlimmerPool();
         }
 
@@ -139,6 +143,7 @@ namespace Cinderbird.Sifting
             float ashHeight = AshHeight(contents);
 
             UpdateAshDisc(ashHeight);
+            UpdateAshColor(contents);
             // Embers lie on the floor; the ash disc hides them until it drains below their tops.
             _embers.Sync(contents.Embers, 0f);
             UpdateGlimmers(contents.Embers, ashHeight);
@@ -159,6 +164,19 @@ namespace Cinderbird.Sifting
             }
 
             return 0f;
+        }
+
+        // The ash takes the color of the layers it was dug from; while pouring, the incoming load's color.
+        private void UpdateAshColor(SieveContents contents)
+        {
+            if (_ashRenderer == null)
+            {
+                return;
+            }
+
+            bool pouring = !contents.HasAsh && _filler != null && _filler.IsFilling;
+            _ashBlock.SetColor(BaseColorId, pouring ? _filler.IncomingAshColor : contents.AshColor);
+            _ashRenderer.SetPropertyBlock(_ashBlock);
         }
 
         private float LoadHeight(float loadVolume)

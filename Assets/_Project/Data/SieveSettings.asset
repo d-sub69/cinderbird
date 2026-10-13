@@ -12,8 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18d6307fd4ef4004c9f51e409e7b3ab0, type: 3}
   m_Name: SieveSettings
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Sifting.SieveSettings
+  _emberCapacity: 16
   _maxVisibleEmbers: 20
   _radius: 0.2
   _spotJitter: 0.25
   _fullAshHeight: 0.06
   _referenceAshVolume: 0.2
+  _fillDuration: 0.45
+  _clumpsPerLiter: 0.1
+  _maxClumps: 24
+  _clumpArcHeight: 0.35
+  _clumpSize: 0.05
+  _digPuffParticles: 25

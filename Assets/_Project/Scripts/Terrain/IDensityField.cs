@@ -5,6 +5,7 @@ namespace Cinderbird.Terrain
     /// <summary>
     /// A density field addressed by sample index: one chunk's <see cref="VoxelGrid"/> or the whole
     /// <see cref="VoxelWorld"/>. Lets digging, glimmers and generation work on either.
+    /// Each sample also carries the ash layer it belongs to.
     /// </summary>
     public interface IDensityField
     {
@@ -21,6 +22,11 @@ namespace Cinderbird.Terrain
 
         /// <summary>Writes a sample (clamped to -1..1).</summary>
         void SetDensity(int x, int y, int z, float density);
+
+        /// <summary>Index of the ash layer the sample belongs to (0 = outermost).</summary>
+        byte GetLayer(int x, int y, int z);
+
+        void SetLayer(int x, int y, int z, byte layer);
 
         /// <summary>Outer-edge samples, which stay air so the surface is always closed.</summary>
         bool IsBoundary(int x, int y, int z);

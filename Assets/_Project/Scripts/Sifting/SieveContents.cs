@@ -1,16 +1,20 @@
 using System;
 using System.Collections.Generic;
 using Cinderbird.Embers;
+using UnityEngine;
 
 namespace Cinderbird.Sifting
 {
     /// <summary>
     /// What is in the sieve: loose ash and the embers caught with it.
-    /// Rule: you can only scoop into an ash-free sieve, so the loop is scoop → shake → scoop.
-    /// Embers pile up across scoops until poured out.
+    /// Rules: you can only scoop into an ash-free sieve (scoop → shake → scoop), and not once it holds its
+    /// ember capacity. Embers pile up across scoops until poured out.
     /// </summary>
     public sealed class SieveContents : IEmberSource
     {
+        private static readonly Color DefaultAshColor = new Color(0.55f, 0.55f, 0.55f, 1f);
+        private static readonly Color DefaultDustColor = new Color(0.78f, 0.76f, 0.74f, 0.8f);
+
         private readonly List<Ember> _embers = new List<Ember>();
 
         public event Action Changed;
@@ -24,7 +28,18 @@ namespace Cinderbird.Sifting
 
         public IReadOnlyList<Ember> Embers => _embers;
 
-        public bool CanScoop => AshVolume <= 0f;
+        /// <summary>Scooping stops once this many embers are in the sieve. Unlimited by default.</summary>
+        public int EmberCapacity { get; set; } = int.MaxValue;
+
+        public bool IsFullOfEmbers => _embers.Count >= EmberCapacity;
+
+        public bool CanScoop => AshVolume <= 0f && !IsFullOfEmbers;
+
+        /// <summary>Color of the current load's ash, blended from the layers it was dug from.</summary>
+        public Color AshColor { get; private set; } = DefaultAshColor;
+
+        /// <summary>Color of the dust the current load sheds when shaken.</summary>
+        public Color DustColor { get; private set; } = DefaultDustColor;
 
         /// <summary>Ash volume of the current load when it was scooped; each scoop starts a new load.</summary>
         public float LoadVolume { get; private set; }
@@ -35,12 +50,22 @@ namespace Cinderbird.Sifting
         /// <returns>False (and nothing changes) when the sieve still holds ash.</returns>
         public bool TryAdd(float ashVolume, List<Ember> embers)
         {
+            return TryAdd(ashVolume, embers, DefaultAshColor, DefaultDustColor);
+        }
+
+        /// <summary>
+        /// Adds a scooped load. Only the ash rule applies here: the ember limit is checked before digging,
+        /// so a load already on its way is never lost.
+        /// </summary>
+        /// <returns>False (and nothing changes) when the sieve still holds ash.</returns>
+        public bool TryAdd(float ashVolume, List<Ember> embers, Color ashColor, Color dustColor)
+        {
             if (ashVolume < 0f)
             {
                 throw new ArgumentOutOfRangeException(nameof(ashVolume), "Ash volume cannot be negative.");
             }
 
-            if (!CanScoop)
+            if (HasAsh)
             {
                 return false;
             }
@@ -48,6 +73,8 @@ namespace Cinderbird.Sifting
             AshVolume += ashVolume;
             // Scooping is only allowed into an ash-free sieve, so this ash is the whole new load.
             LoadVolume = AshVolume;
+            AshColor = ashColor;
+            DustColor = dustColor;
             _embers.AddRange(embers);
             Changed?.Invoke();
             return true;

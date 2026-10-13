@@ -13,6 +13,7 @@ namespace Cinderbird.Terrain
         public const float Ash = 1f;
 
         private readonly float[] _densities;
+        private readonly byte[] _layers;
 
         public VoxelGrid(int cellsX, int cellsY, int cellsZ, float cellSize, Vector3 origin)
         {
@@ -34,6 +35,7 @@ namespace Cinderbird.Terrain
 
             _densities = new float[SamplesX * SamplesY * SamplesZ];
             Array.Fill(_densities, Air);
+            _layers = new byte[_densities.Length];
         }
 
         public int CellsX { get; }
@@ -50,6 +52,9 @@ namespace Cinderbird.Terrain
 
         /// <summary>Raw samples, indexed with <see cref="Index"/>. Exposed so hot loops avoid per-sample calls.</summary>
         public float[] Densities => _densities;
+
+        /// <summary>Layer index per sample, indexed with <see cref="Index"/>.</summary>
+        public byte[] Layers => _layers;
 
         /// <summary>
         /// Share of a sample's cell volume that counts as ash. Linear in density, so a one-cell
@@ -75,6 +80,16 @@ namespace Cinderbird.Terrain
         public void SetDensity(int x, int y, int z, float density)
         {
             _densities[Index(x, y, z)] = Mathf.Clamp(density, Air, Ash);
+        }
+
+        public byte GetLayer(int x, int y, int z)
+        {
+            return _layers[Index(x, y, z)];
+        }
+
+        public void SetLayer(int x, int y, int z, byte layer)
+        {
+            _layers[Index(x, y, z)] = layer;
         }
 
         public Vector3 SamplePosition(int x, int y, int z)

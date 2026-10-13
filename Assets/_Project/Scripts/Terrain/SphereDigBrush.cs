@@ -10,6 +10,18 @@ namespace Cinderbird.Terrain
         /// <param name="center">Field-local position (same space as <see cref="IDensityField.SamplePosition"/>).</param>
         public static DigResult Dig(IDensityField field, Vector3 center, float radius)
         {
+            return Dig(field, center, radius, null);
+        }
+
+        /// <param name="locks">Samples in a locked layer are left untouched; null digs everything.</param>
+        public static DigResult Dig(IDensityField field, Vector3 center, float radius, LayerLocks locks)
+        {
+            return Dig(field, center, radius, locks, null);
+        }
+
+        /// <param name="removedByLayer">If given, cubic meters removed from each layer are added to it (index = layer).</param>
+        public static DigResult Dig(IDensityField field, Vector3 center, float radius, LayerLocks locks, float[] removedByLayer)
+        {
             if (radius <= 0f)
             {
                 return default;
@@ -30,6 +42,7 @@ namespace Cinderbird.Terrain
             int z1 = Mathf.Min(field.SamplesZ - 2, Mathf.CeilToInt(max.z));
 
             float removedFill = 0f;
+            int blockedLayer = -1;
             for (int z = z0; z <= z1; z++)
             {
                 for (int y = y0; y <= y1; y++)
@@ -46,14 +59,28 @@ namespace Cinderbird.Terrain
                             continue;
                         }
 
+                        int layer = field.GetLayer(x, y, z);
+                        // A sealed layer stays as a wall; remember it so the player can be told why.
+                        if (locks != null && !locks.IsUnlocked(layer))
+                        {
+                            blockedLayer = blockedLayer < 0 ? layer : blockedLayer;
+                            continue;
+                        }
+
                         // Each sample is visited once even where chunks share it, so nothing is counted twice.
-                        removedFill += VoxelGrid.Fill(current) - VoxelGrid.Fill(carved);
+                        float removed = VoxelGrid.Fill(current) - VoxelGrid.Fill(carved);
+                        removedFill += removed;
+                        if (removedByLayer != null && layer < removedByLayer.Length)
+                        {
+                            removedByLayer[layer] += removed * field.CellVolume;
+                        }
+
                         field.SetDensity(x, y, z, carved);
                     }
                 }
             }
 
-            return new DigResult(removedFill * field.CellVolume, 0);
+            return new DigResult(removedFill * field.CellVolume, 0, blockedLayer);
         }
     }
 }

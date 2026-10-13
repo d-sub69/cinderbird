@@ -13,6 +13,12 @@ namespace Cinderbird.Terrain
 
         public static void Generate(IDensityField grid, AshPileShape shape)
         {
+            Generate(grid, shape, null);
+        }
+
+        /// <param name="layout">Assigns each sample its ash layer by depth below the surface; null leaves layer 0.</param>
+        public static void Generate(IDensityField grid, AshPileShape shape, LayerLayout layout)
+        {
             float cellSize = grid.CellSize;
             float noiseOffset = shape.NoiseSeed * SeedSpacing;
 
@@ -35,6 +41,10 @@ namespace Cinderbird.Terrain
                         }
 
                         grid.SetDensity(x, y, z, density);
+                        if (layout != null)
+                        {
+                            grid.SetLayer(x, y, z, layout.LayerAt(grid.SamplePosition(x, y, z), height));
+                        }
                     }
                 }
             }

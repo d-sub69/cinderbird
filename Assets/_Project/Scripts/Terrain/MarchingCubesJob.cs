@@ -24,6 +24,12 @@ namespace Cinderbird.Terrain
         [ReadOnly] public NativeArray<int> EdgeCorners;
         [ReadOnly] public NativeArray<int3> CornerOffsets;
 
+        /// <summary>(Cells + 1)³ layer indices, one per real sample.</summary>
+        [ReadOnly] public NativeArray<byte> Layers;
+
+        /// <summary>Vertex color per layer; layers past the end use the last entry.</summary>
+        [ReadOnly] public NativeArray<float4> LayerTints;
+
         public int3 Cells;
         public float CellSize;
 
@@ -35,12 +41,14 @@ namespace Cinderbird.Terrain
 
         public NativeList<float3> Vertices;
         public NativeList<float3> Normals;
+        public NativeList<float4> Colors;
         public NativeList<int> Indices;
 
         public void Execute()
         {
             Vertices.Clear();
             Normals.Clear();
+            Colors.Clear();
             Indices.Clear();
             for (int i = 0; i < EdgeCache.Length; i++)
             {
@@ -110,9 +118,14 @@ namespace Cinderbird.Terrain
             // Density rises into the ash, so the outward normal points down the gradient.
             float3 normal = math.lengthsq(gradient) > 0f ? -math.normalize(gradient) : new float3(0f, 1f, 0f);
 
+            // Color from the ash side of the edge: the surface shows the layer that was cut into.
+            int ashSample = SampleIndex(densityA > IsoLevel ? a : b);
+            int tint = math.min(Layers[ashSample], LayerTints.Length - 1);
+
             int vertexIndex = Vertices.Length;
             Vertices.Add(position);
             Normals.Add(normal);
+            Colors.Add(LayerTints[tint]);
             EdgeCache[key] = vertexIndex;
             return vertexIndex;
         }

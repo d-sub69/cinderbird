@@ -137,6 +137,7 @@ namespace Cinderbird.EditorTools
 
             property.objectReferenceValue = value;
             serialized.ApplyModifiedProperties();
+            MarkModified(target);
             return true;
         }
 
@@ -192,7 +193,18 @@ namespace Cinderbird.EditorTools
 
             assign(property);
             serialized.ApplyModifiedProperties();
+            MarkModified(target);
             return true;
+        }
+
+        // Assets (unlike scene objects) are only written when flagged dirty; flag them explicitly so
+        // AssetDatabase.SaveAssets always writes setup changes to disk.
+        private static void MarkModified(Object target)
+        {
+            if (EditorUtility.IsPersistent(target))
+            {
+                EditorUtility.SetDirty(target);
+            }
         }
 
         /// <summary>Fills a serialized array of object references (e.g. a list of actions or images).</summary>
@@ -258,6 +270,7 @@ namespace Cinderbird.EditorTools
 
             property.colorValue = value;
             serialized.ApplyModifiedProperties();
+            MarkModified(target);
             return true;
         }
 

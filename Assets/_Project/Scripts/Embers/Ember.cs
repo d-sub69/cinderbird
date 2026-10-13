@@ -7,10 +7,11 @@ namespace Cinderbird.Embers
     /// </summary>
     public readonly struct Ember
     {
-        public Ember(Vector3 position, int tierIndex)
+        public Ember(Vector3 position, int tierIndex, byte layer = 0)
         {
             Position = position;
             TierIndex = tierIndex;
+            Layer = layer;
         }
 
         /// <summary>Chunk-local position while buried in the pile.</summary>
@@ -18,5 +19,8 @@ namespace Cinderbird.Embers
 
         /// <summary>Index into the <see cref="EmberTierCatalog"/>.</summary>
         public int TierIndex { get; }
+
+        /// <summary>Ash layer it was buried in; it can't be dug out while that layer is locked.</summary>
+        public byte Layer { get; }
     }
 }

@@ -5,6 +5,11 @@ namespace Cinderbird.Sifting
     [CreateAssetMenu(fileName = "SieveSettings", menuName = "Cinderbird/Sieve Settings")]
     public sealed class SieveSettings : ScriptableObject
     {
+        [Header("Capacity")]
+        [Tooltip("Scooping is refused once the sieve holds this many embers. Keep it a few below Max Visible Embers: " +
+                 "the last scoop can bring in a couple extra, and those should still be drawn.")]
+        [SerializeField, Min(1)] private int _emberCapacity = 16;
+
         [Header("Visuals")]
         [Tooltip("Ember objects created up front; embers beyond this are counted but not drawn.")]
         [SerializeField, Min(1)] private int _maxVisibleEmbers = 20;
@@ -39,6 +44,7 @@ namespace Cinderbird.Sifting
         public int DigPuffParticles => _digPuffParticles;
 
         public int MaxVisibleEmbers => _maxVisibleEmbers;
+        public int EmberCapacity => _emberCapacity;
         public float Radius => _radius;
         public float SpotJitter => _spotJitter;
         public float FullAshHeight => _fullAshHeight;

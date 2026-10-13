@@ -22,9 +22,13 @@ namespace Cinderbird.Player
         [SerializeField] private LayerMask _hitMask = ~0;
 
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
+        private float[] _removedByLayer = System.Array.Empty<float>();
         private VoxelTerrain _targetTerrain;
         private Vector3 _targetCenter;
         private Vector3 _targetSurfacePoint;
+
+        /// <summary>Fired when a click on the pile is refused, with the reason (for player feedback).</summary>
+        public event System.Action<ScoopRefusal> ScoopRefused;
 
         /// <summary>True when the view ray hits diggable ash within reach this frame.</summary>
         public bool HasTarget => _targetTerrain != null;
@@ -95,28 +99,56 @@ namespace Cinderbird.Player
 
         private void TryScoop()
         {
-            // Checked before digging so a refused scoop doesn't destroy ash or embers.
             bool pouring = _filler != null && _filler.IsFilling;
-            if (_targetTerrain == null || !_sieve.Contents.CanScoop || pouring)
+            if (_targetTerrain == null || pouring)
             {
                 return;
             }
 
+            // Checked before digging so a refused scoop doesn't destroy ash or embers.
+            SieveContents contents = _sieve.Contents;
+            if (contents.HasAsh)
+            {
+                ScoopRefused?.Invoke(ScoopRefusal.AshInSieve);
+                return;
+            }
+
+            if (contents.IsFullOfEmbers)
+            {
+                ScoopRefused?.Invoke(ScoopRefusal.SieveFullOfEmbers);
+                return;
+            }
+
             _extractedEmbers.Clear();
-            DigResult result = _targetTerrain.Dig(_targetCenter, _settings.Radius, _extractedEmbers);
+            float[] removedByLayer = LayerBuffer(_targetTerrain.LayerCount);
+            DigResult result = _targetTerrain.Dig(_targetCenter, _settings.Radius, _extractedEmbers, removedByLayer);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
                 return;
             }
 
+            _targetTerrain.MixLayerColors(removedByLayer, out Color ashColor, out Color dustColor);
+
             // The filler copies the embers, so the list can be reused for the next dig.
             if (_filler != null && _filler.isActiveAndEnabled)
             {
-                _filler.TryBegin(result.RemovedVolume, _extractedEmbers, _targetSurfacePoint);
+                _filler.TryBegin(result.RemovedVolume, _extractedEmbers, _targetSurfacePoint, ashColor, dustColor);
                 return;
             }
 
-            _sieve.Contents.TryAdd(result.RemovedVolume, _extractedEmbers);
+            contents.TryAdd(result.RemovedVolume, _extractedEmbers, ashColor, dustColor);
+        }
+
+        // Reused between digs; only reallocated if the terrain's layer count changes.
+        private float[] LayerBuffer(int layerCount)
+        {
+            if (_removedByLayer.Length != layerCount)
+            {
+                _removedByLayer = new float[layerCount];
+            }
+
+            System.Array.Clear(_removedByLayer, 0, _removedByLayer.Length);
+            return _removedByLayer;
         }
     }
 }

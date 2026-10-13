@@ -16,6 +16,7 @@ namespace Cinderbird.Terrain
         private NativeArray<int> _triangles;
         private NativeArray<int> _edgeCorners;
         private NativeArray<int3> _cornerOffsets;
+        private NativeArray<float4> _layerTints;
 
         // Results of the last batch, valid until ReleaseResults or the next batch.
         private readonly List<BatchItem> _batch = new List<BatchItem>();
@@ -23,9 +24,11 @@ namespace Cinderbird.Terrain
         private struct BatchItem
         {
             public NativeArray<float> PaddedDensities;
+            public NativeArray<byte> Layers;
             public NativeArray<int> EdgeCache;
             public NativeList<float3> Vertices;
             public NativeList<float3> Normals;
+            public NativeList<float4> Colors;
             public NativeList<int> Indices;
         }
 
@@ -39,6 +42,25 @@ namespace Cinderbird.Terrain
                 Vector3Int offset = MarchingCubesTables.CornerOffsets[i];
                 _cornerOffsets[i] = new int3(offset.x, offset.y, offset.z);
             }
+
+            SetLayerTints(new[] { Color.white });
+        }
+
+        /// <summary>Vertex colors per ash layer (index = layer). Defaults to plain white.</summary>
+        public void SetLayerTints(Color[] tints)
+        {
+            if (_layerTints.IsCreated)
+            {
+                _layerTints.Dispose();
+            }
+
+            int count = Math.Max(1, tints?.Length ?? 0);
+            _layerTints = new NativeArray<float4>(count, Allocator.Persistent);
+            for (int i = 0; i < count; i++)
+            {
+                Color tint = tints != null && i < tints.Length ? tints[i] : Color.white;
+                _layerTints[i] = new float4(tint.r, tint.g, tint.b, tint.a);
+            }
         }
 
         /// <summary>Number of chunk meshes from the last <see cref="PolygonizeChunks"/>.</summary>
@@ -46,6 +68,7 @@ namespace Cinderbird.Terrain
 
         public NativeArray<float3> ResultVertices(int result) => _batch[result].Vertices.AsArray();
         public NativeArray<float3> ResultNormals(int result) => _batch[result].Normals.AsArray();
+        public NativeArray<float4> ResultColors(int result) => _batch[result].Colors.AsArray();
         public NativeArray<int> ResultIndices(int result) => _batch[result].Indices.AsArray();
 
         /// <summary>Meshes a standalone grid (normals at its edge are clamped to it).</summary>
@@ -53,7 +76,7 @@ namespace Cinderbird.Terrain
         {
             int3 cells = new int3(grid.CellsX, grid.CellsY, grid.CellsZ);
             NativeArray<float> padded = PadGrid(grid, cells);
-            RunSingle(padded, cells, grid.CellSize, grid.Origin, output);
+            RunSingle(padded, new NativeArray<byte>(grid.Layers, Allocator.TempJob), cells, grid.CellSize, grid.Origin, output);
         }
 
         /// <summary>Meshes one chunk of a world on its own (mainly for tests).</summary>
@@ -62,7 +85,7 @@ namespace Cinderbird.Terrain
             VoxelGrid chunk = world.GetChunk(chunkIndex);
             int3 cells = new int3(chunk.CellsX, chunk.CellsY, chunk.CellsZ);
             NativeArray<float> padded = PadChunk(world, chunkIndex, cells);
-            RunSingle(padded, cells, chunk.CellSize, chunk.Origin, output);
+            RunSingle(padded, new NativeArray<byte>(chunk.Layers, Allocator.TempJob), cells, chunk.CellSize, chunk.Origin, output);
         }
 
         /// <summary>
@@ -82,7 +105,8 @@ namespace Cinderbird.Terrain
             {
                 VoxelGrid chunk = world.GetChunk(chunkIndices[i]);
                 int3 cells = new int3(chunk.CellsX, chunk.CellsY, chunk.CellsZ);
-                BatchItem item = Allocate(PadChunk(world, chunkIndices[i], cells), cells);
+                // A chunk's layer array is already laid out exactly like the job expects: (Cells + 1)³ samples.
+                BatchItem item = Allocate(PadChunk(world, chunkIndices[i], cells), new NativeArray<byte>(chunk.Layers, Allocator.TempJob), cells);
                 _batch.Add(item);
                 handles[i] = CreateJob(item, cells, chunk.CellSize, chunk.Origin).Schedule();
             }
@@ -110,11 +134,16 @@ namespace Cinderbird.Terrain
                 _edgeCorners.Dispose();
                 _cornerOffsets.Dispose();
             }
+
+            if (_layerTints.IsCreated)
+            {
+                _layerTints.Dispose();
+            }
         }
 
-        private void RunSingle(NativeArray<float> padded, int3 cells, float cellSize, Vector3 origin, MeshBuffers output)
+        private void RunSingle(NativeArray<float> padded, NativeArray<byte> layers, int3 cells, float cellSize, Vector3 origin, MeshBuffers output)
         {
-            BatchItem item = Allocate(padded, cells);
+            BatchItem item = Allocate(padded, layers, cells);
             try
             {
                 CreateJob(item, cells, cellSize, origin).Schedule().Complete();
@@ -134,25 +163,30 @@ namespace Cinderbird.Terrain
                 Triangles = _triangles,
                 EdgeCorners = _edgeCorners,
                 CornerOffsets = _cornerOffsets,
+                Layers = item.Layers,
+                LayerTints = _layerTints,
                 Cells = cells,
                 CellSize = cellSize,
                 Origin = new float3(origin.x, origin.y, origin.z),
                 EdgeCache = item.EdgeCache,
                 Vertices = item.Vertices,
                 Normals = item.Normals,
+                Colors = item.Colors,
                 Indices = item.Indices,
             };
         }
 
-        private static BatchItem Allocate(NativeArray<float> padded, int3 cells)
+        private static BatchItem Allocate(NativeArray<float> padded, NativeArray<byte> layers, int3 cells)
         {
             int3 samples = cells + 1;
             return new BatchItem
             {
                 PaddedDensities = padded,
+                Layers = layers,
                 EdgeCache = new NativeArray<int>(samples.x * samples.y * samples.z * 3, Allocator.TempJob, NativeArrayOptions.UninitializedMemory),
                 Vertices = new NativeList<float3>(Allocator.TempJob),
                 Normals = new NativeList<float3>(Allocator.TempJob),
+                Colors = new NativeList<float4>(Allocator.TempJob),
                 Indices = new NativeList<int>(Allocator.TempJob),
             };
         }
@@ -160,9 +194,11 @@ namespace Cinderbird.Terrain
         private static void Free(BatchItem item)
         {
             item.PaddedDensities.Dispose();
+            item.Layers.Dispose();
             item.EdgeCache.Dispose();
             item.Vertices.Dispose();
             item.Normals.Dispose();
+            item.Colors.Dispose();
             item.Indices.Dispose();
         }
 
@@ -173,6 +209,8 @@ namespace Cinderbird.Terrain
             {
                 output.Vertices.Add(item.Vertices[i]);
                 output.Normals.Add(item.Normals[i]);
+                float4 color = item.Colors[i];
+                output.Colors.Add(new Color(color.x, color.y, color.z, color.w));
             }
 
             for (int i = 0; i < item.Indices.Length; i++)

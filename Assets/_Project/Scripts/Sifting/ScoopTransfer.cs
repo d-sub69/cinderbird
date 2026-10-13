@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cinderbird.Embers;
+using UnityEngine;
 
 namespace Cinderbird.Sifting
 {
@@ -21,11 +22,22 @@ namespace Cinderbird.Sifting
 
         public IReadOnlyList<Ember> Embers => _embers;
 
+        /// <summary>Color of the load's ash, from the layers it was dug from.</summary>
+        public Color AshColor { get; private set; }
+
+        public Color DustColor { get; private set; }
+
         /// <summary>0 when the pour starts, 1 when the load has fully arrived; 0 when idle.</summary>
         public float Progress => !IsActive ? 0f : _duration <= 0f ? 1f : Math.Min(1f, _elapsed / _duration);
 
         /// <returns>False if a load is already in flight.</returns>
         public bool TryBegin(float volume, List<Ember> embers, float duration)
+        {
+            return TryBegin(volume, embers, duration, new Color(0.55f, 0.55f, 0.55f, 1f), new Color(0.78f, 0.76f, 0.74f, 0.8f));
+        }
+
+        /// <returns>False if a load is already in flight.</returns>
+        public bool TryBegin(float volume, List<Ember> embers, float duration, Color ashColor, Color dustColor)
         {
             if (volume < 0f)
             {
@@ -41,6 +53,8 @@ namespace Cinderbird.Sifting
             _embers.Clear();
             _embers.AddRange(embers);
             Volume = volume;
+            AshColor = ashColor;
+            DustColor = dustColor;
             _duration = Math.Max(0f, duration);
             _elapsed = 0f;
             IsActive = true;
@@ -72,7 +86,7 @@ namespace Cinderbird.Sifting
             IsActive = false;
             float volume = Volume;
             Volume = 0f;
-            sieve.TryAdd(volume, _embers);
+            sieve.TryAdd(volume, _embers, AshColor, DustColor);
             _embers.Clear();
             return true;
         }

@@ -25,6 +25,8 @@ namespace Cinderbird.Sifting
         public bool IsFilling => _transfer.IsActive;
         public float IncomingVolume => _transfer.Volume;
         public float IncomingProgress => _transfer.Progress;
+        public Color IncomingAshColor => _transfer.AshColor;
+        public Color IncomingDustColor => _transfer.DustColor;
 
         private void Awake()
         {
@@ -39,7 +41,14 @@ namespace Cinderbird.Sifting
         /// <returns>False if a pour is already running.</returns>
         public bool TryBegin(float volume, List<Ember> embers, Vector3 digPoint)
         {
-            if (!_transfer.TryBegin(volume, embers, _settings.FillDuration))
+            return TryBegin(volume, embers, digPoint, new Color(0.55f, 0.55f, 0.55f, 1f), new Color(0.78f, 0.76f, 0.74f, 0.8f));
+        }
+
+        /// <param name="ashColor">Color of the load's ash (from the layers it was dug from).</param>
+        /// <param name="dustColor">Color of the dust it sheds.</param>
+        public bool TryBegin(float volume, List<Ember> embers, Vector3 digPoint, Color ashColor, Color dustColor)
+        {
+            if (!_transfer.TryBegin(volume, embers, _settings.FillDuration, ashColor, dustColor))
             {
                 return false;
             }
