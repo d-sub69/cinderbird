@@ -39,6 +39,12 @@ namespace Cinderbird.Player
         private float _capsuleBottom;
         private float _eyeBelowTop;
 
+        /// <summary>The player's sensitivity option; multiplies the base sensitivity from the movement settings.</summary>
+        public float LookSensitivityMultiplier { get; set; } = 1f;
+
+        /// <summary>The player's invert-Y option: moving the mouse up looks down.</summary>
+        public bool InvertY { get; set; }
+
         /// <summary>Where the player is and looks right now; default before Awake has run.</summary>
         public PlayerPose Pose => _motor == null
             ? default
@@ -171,7 +177,13 @@ namespace Cinderbird.Player
                                  (_suspendLookOnlyWhileEnabled == null || _suspendLookOnlyWhileEnabled.isActiveAndEnabled);
             if (Cursor.lockState == CursorLockMode.Locked && !lookSuspended)
             {
-                _look.Apply(_lookAction.action.ReadValue<Vector2>(), _settings.LookSensitivity);
+                Vector2 lookDelta = _lookAction.action.ReadValue<Vector2>();
+                if (InvertY)
+                {
+                    lookDelta.y = -lookDelta.y;
+                }
+
+                _look.Apply(lookDelta, _settings.LookSensitivity * LookSensitivityMultiplier);
             }
 
             transform.localRotation = Quaternion.Euler(0f, _look.Yaw, 0f);

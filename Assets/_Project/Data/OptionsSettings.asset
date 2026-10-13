@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 32a8a238c930b1a4d860096070ed61e3, type: 3}
+  m_Name: OptionsSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Options.OptionsSettings
+  _fileName: options.json
+  _minSensitivity: 0.2
+  _maxSensitivity: 3
+  _defaultSensitivity: 1
+  _minFieldOfView: 50
+  _maxFieldOfView: 100
+  _defaultFieldOfView: 60
+  _defaultQualityLevel: 2
+  _frameRateChoices: 1e0000003c0000007800000090000000i

@@ -49,6 +49,7 @@ Assets/
       Economy/         currencies, costs (later)
       UI/              HUD and menus
       Save/            persistence: save file, autosave, terrain snapshots
+      Options/         player options (options.json), applied to camera, input, quality, display, volume
     Data/              ScriptableObject assets (ember tiers, upgrade definitions, balance values)
     Prefabs/
     Materials/
@@ -107,7 +108,7 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   through Unity's API: idempotent, Undo-aware, saves the scene. I run it, then test. Tell me what to click
   and what to test; only list manual Editor steps for things a script can't reasonably do (e.g. look tuning).
   **The menu only lists uncommitted steps:** when a step is committed, its `SetupStep*.cs` is deleted in that
-  same commit (its result lives in the committed scene/assets); `SetupUtility.cs` stays.
+  same commit (its result lives in the committed scene/assets); `SetupUtility.cs` and `SetupUi.cs` (menu-building helpers) stay.
 - **Never hand-edit** `.unity`, `.prefab`, `.asset` YAML or `.meta` files. Setup goes through Editor scripts
   using Unity's API (SerializedObject, AssetDatabase, Undo), never by writing those files directly.
 - **Ask before** adding any package or third-party asset.
