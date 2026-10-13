@@ -128,16 +128,45 @@ namespace Cinderbird.Embers
                 return;
             }
 
-            // Any ember within glimmer depth of the new hole may have changed, including in neighboring chunks.
+            // An ember's glimmer comes from probing up to MaxDepth around it, and the dig changed samples only within
+            // its radius (plus one cell of blending). Embers farther away than both can't have changed, so only the
+            // ones within reach are probed again; probing every ember of the surrounding chunks took milliseconds.
             AshTerrain terrain = _terrain.Terrain;
-            Vector3 reach = Vector3.one * (radius + _settings.MaxDepth + terrain.World.CellSize);
-            terrain.World.ChunksOverlapping(center - reach, center + reach, _chunkScratch);
+            float reach = radius + _settings.MaxDepth + terrain.World.CellSize;
+            Vector3 extent = Vector3.one * reach;
+            terrain.World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
             for (int i = 0; i < _chunkScratch.Count; i++)
             {
-                CollectCandidates(terrain, _chunkScratch[i]);
+                RecollectNear(terrain, _chunkScratch[i], center, reach * reach);
             }
 
             Reselect();
+        }
+
+        private void RecollectNear(AshTerrain terrain, int chunk, Vector3 center, float reachSquared)
+        {
+            // Drop this area's glimmers, including those of embers the dig just took...
+            List<GlimmerPoint> candidates = _chunkCandidates[chunk];
+            for (int i = candidates.Count - 1; i >= 0; i--)
+            {
+                if ((candidates[i].EmberPosition - center).sqrMagnitude <= reachSquared)
+                {
+                    int last = candidates.Count - 1;
+                    candidates[i] = candidates[last];
+                    candidates.RemoveAt(last);
+                }
+            }
+
+            // ...then probe the embers still buried there.
+            EmberField embers = terrain.EmbersIn(chunk);
+            for (int i = 0; i < embers.Count; i++)
+            {
+                Ember ember = embers[i];
+                if ((ember.Position - center).sqrMagnitude <= reachSquared)
+                {
+                    TryAddCandidate(terrain, ember, candidates);
+                }
+            }
         }
 
         private void CreatePool()
@@ -168,17 +197,21 @@ namespace Cinderbird.Embers
 
             for (int i = 0; i < embers.Count; i++)
             {
-                Ember ember = embers[i];
-                if (ember.TierIndex < 0 || ember.TierIndex >= _tierCatalog.Count || _tierCatalog[ember.TierIndex] == null)
-                {
-                    continue;
-                }
+                TryAddCandidate(terrain, embers[i], candidates);
+            }
+        }
 
-                if (EmberGlimmer.TryFindSurface(terrain.World, ember.Position, _settings.MaxDepth, _terrain.LocalFloorHeight,
-                        out Vector3 surfacePoint, out float depth))
-                {
-                    candidates.Add(new GlimmerPoint(surfacePoint, depth, ember.TierIndex));
-                }
+        private void TryAddCandidate(AshTerrain terrain, Ember ember, List<GlimmerPoint> candidates)
+        {
+            if (ember.TierIndex < 0 || ember.TierIndex >= _tierCatalog.Count || _tierCatalog[ember.TierIndex] == null)
+            {
+                return;
+            }
+
+            if (EmberGlimmer.TryFindSurface(terrain.World, ember.Position, _settings.MaxDepth, _terrain.LocalFloorHeight,
+                    out Vector3 surfacePoint, out float depth))
+            {
+                candidates.Add(new GlimmerPoint(surfacePoint, depth, ember.TierIndex, ember.Position));
             }
         }
 

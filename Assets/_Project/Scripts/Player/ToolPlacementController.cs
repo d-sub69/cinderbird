@@ -29,6 +29,8 @@ namespace Cinderbird.Player
         private MaterialPropertyBlock _propertyBlock;
         private PlaceableTool _shownGhostOwner;
         private Renderer[] _ghostRenderers = Array.Empty<Renderer>();
+        private GameObject _lookedUpHeld;
+        private PlaceableTool _lookedUpPlaceable;
         private Vector3 _groundPoint;
         private Quaternion _placeRotation;
 
@@ -98,7 +100,15 @@ namespace Cinderbird.Player
         private void UpdatePlacementPreview()
         {
             GameObject held = _toolBelt.ActiveHeldObject;
-            PlaceableTool placing = held != null ? held.GetComponent<PlaceableTool>() : null;
+            // Looked up only when the tool in hand changes: in the Editor, a GetComponent that finds nothing
+            // allocates, which would show up as per-frame garbage while holding the sieve.
+            if (held != _lookedUpHeld)
+            {
+                _lookedUpHeld = held;
+                _lookedUpPlaceable = held != null ? held.GetComponent<PlaceableTool>() : null;
+            }
+
+            PlaceableTool placing = _lookedUpPlaceable;
             PlacementResult placement = placing != null ? EvaluateLookPoint() : PlacementResult.NoSurface;
 
             ShowGhost(placing, placement);

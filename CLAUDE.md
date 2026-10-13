@@ -90,6 +90,10 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - Plan for the Jobs System + Burst for meshing once the prototype works; keep the meshing code pure and
   data-oriented so it can be moved there.
 - Embers: emissive material + bloom for all; real point lights only on the nearest few (cap configurable).
+- **Minimum spec:** GTX 1050, i5-6500, 8 GB RAM, 60 fps at 1080p Medium. **Dev PC:** Ryzen 7 5700X, RTX 3070 Ti, 32 GB.
+- **Budget** (dev PC, 1080p Medium, VSync off; `Data/PerformanceBudget.asset`, red in the F3 overlay): main thread
+  ≤ 6 ms, GPU ≤ 4 ms, 0 B garbage per frame, dig incl. re-mesh ≤ 4 ms, autosave main-thread part ≤ 2 ms,
+  start-up ≤ 3 s. Check with `Docs/PerformanceTest.md` (builds via Cinderbird → Build; the game logs `[Perf]` lines).
 
 ## Terrain design
 - A `VoxelWorld` of chunks, each a density grid of 32×32×32 cells (cell size 0.25 m), values > 0 = ash.
@@ -108,7 +112,7 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   through Unity's API: idempotent, Undo-aware, saves the scene. I run it, then test. Tell me what to click
   and what to test; only list manual Editor steps for things a script can't reasonably do (e.g. look tuning).
   **The menu only lists uncommitted steps:** when a step is committed, its `SetupStep*.cs` is deleted in that
-  same commit (its result lives in the committed scene/assets); `SetupUtility.cs` and `SetupUi.cs` (menu-building helpers) stay.
+  same commit (its result lives in the committed scene/assets); `SetupUtility.cs`, `SetupUi.cs` (menu-building helpers) and `BuildMenu.cs` stay.
 - **Never hand-edit** `.unity`, `.prefab`, `.asset` YAML or `.meta` files. Setup goes through Editor scripts
   using Unity's API (SerializedObject, AssetDatabase, Undo), never by writing those files directly.
 - **Ask before** adding any package or third-party asset.
@@ -121,11 +125,12 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - Prefer CC0 (Kenney, Quaternius, Poly Haven, ambientCG). CC-BY is fine with credit. No "non-commercial" licenses.
 
 ## Definition of done — Phase 1
-- [ ] I can dig anywhere on a full-size mountain with no visible seams and a steady frame rate
-- [ ] The mountain has visible ash layers; locked layers can't be dug into
-- [ ] I can quit, reload, and continue exactly where I left off (terrain, embers, tools, Glow/Heat)
-- [ ] Esc opens a pause menu with options that persist
-- [ ] The game holds its frame-rate target on the agreed minimum-spec PC
+- [x] I can dig anywhere on a full-size mountain with no visible seams and a steady frame rate
+- [x] The mountain has visible ash layers; locked layers can't be dug into
+- [x] I can quit, reload, and continue exactly where I left off (terrain, embers, tools, Glow/Heat)
+- [x] Esc opens a pause menu with options that persist
+- [ ] The game holds its frame-rate target on the agreed minimum-spec PC (budget met on the dev PC, 2026-10-13;
+      still to confirm on real min-spec hardware)
 
 (Prototype 1 and Prototype 2 are done: core loop, tools, inventory, placeable basket, hidden embers, ash
 pour, all playtested.)

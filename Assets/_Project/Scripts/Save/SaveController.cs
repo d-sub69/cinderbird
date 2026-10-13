@@ -53,6 +53,7 @@ namespace Cinderbird.Save
         private readonly List<ToolDefinition> _slotBuffer = new List<ToolDefinition>();
         private readonly List<ToolDefinition> _placedBuffer = new List<ToolDefinition>();
         private SaveSlot _slot;
+        private TerrainSnapshot _terrainSnapshot;
         private Task _writeTask;
         private float _nextAutosaveTime;
         private bool _saveRequested;
@@ -68,6 +69,9 @@ namespace Cinderbird.Save
 
         /// <summary>Full path of the save file; null before Awake.</summary>
         public string SavePath => _slot?.Store.MainPath;
+
+        /// <summary>Main-thread time of the last save (copying the game state), for the performance overlay.</summary>
+        public float LastCaptureMilliseconds { get; private set; }
 
         // Static state survives Play mode sessions when domain reload is off; start each session clean.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -247,6 +251,17 @@ namespace Cinderbird.Save
             _started = true;
             Debug.Log($"Save file: {SavePath}");
             _nextAutosaveTime = Time.unscaledTime + _settings.AutosaveInterval;
+            LoadSave();
+
+            // A throwaway capture behind the loading screen. The first run of this code is compiled on the spot
+            // (6 ms measured), and it fills the terrain snapshot with every chunk the save restored, so neither
+            // cost lands on the first autosave in play.
+            Capture(out _);
+            LastCaptureMilliseconds = 0f;
+        }
+
+        private void LoadSave()
+        {
             bool forced = _loadOnNextStart;
             _loadOnNextStart = false;
             if (Application.isEditor && !_settings.LoadSaveInEditor && !forced)
@@ -464,6 +479,7 @@ namespace Cinderbird.Save
 
         private SaveFile Capture(out TerrainSnapshot terrain)
         {
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
             using (CaptureMarker.Auto())
             {
                 SaveFile file = new SaveFile
@@ -472,7 +488,15 @@ namespace Cinderbird.Save
                 };
 
                 AshTerrain ash = _pile.Terrain;
-                terrain = ash != null ? TerrainSnapshot.Capture(ash) : null;
+                terrain = null;
+                if (ash != null)
+                {
+                    // Kept between saves, so only chunks changed since the last one are copied. Safe to update here:
+                    // a capture only happens while no background write (which reads the snapshot) is running.
+                    _terrainSnapshot ??= new TerrainSnapshot(ash.World.GetChunk(0).Densities.Length, ash.World.ChunkCount);
+                    _terrainSnapshot.Update(ash);
+                    terrain = _terrainSnapshot;
+                }
                 file.Terrain.Fingerprint = _pile.Fingerprint ?? string.Empty;
                 file.Terrain.DeepestUnlockedLayer = _pile.DeepestUnlockedLayer;
 
@@ -482,6 +506,8 @@ namespace Cinderbird.Save
                 CaptureTools(file.Tools);
                 CaptureSieve(file.Sieve);
                 EmberRecord.Fill(file.Basket.Embers, _basket.Contents.Embers);
+                LastCaptureMilliseconds = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 /
+                                                  System.Diagnostics.Stopwatch.Frequency);
                 return file;
             }
         }

@@ -4148,6 +4148,9 @@ MonoBehaviour:
   _terrain: {fileID: 273172401}
   _toggleAction: {fileID: 4138689796323916021, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
   _visibleOnStart: 1
+  _budget: {fileID: 11400000, guid: 1b8b5f413d1f13444ab7e91336e26a7b, type: 2}
+  _save: {fileID: 354520938}
+  _bootstrap: {fileID: 1657112645}
 --- !u!114 &519292805
 MonoBehaviour:
   m_ObjectHideFlags: 0

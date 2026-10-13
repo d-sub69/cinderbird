@@ -39,6 +39,11 @@ namespace Cinderbird.Terrain
         private MarchingCubes _mesher;
         private readonly List<int> _dirtyChunks = new List<int>();
         private readonly List<int> _bakedChunks = new List<int>();
+        private readonly List<int> _pendingColliderChunks = new List<int>();
+        private JobHandle _bakeHandle;
+        private NativeArray<EntityId> _bakeIds;
+        private bool _bakePending;
+        private int _bakeStartFrame;
         private readonly List<int> _batchChunks = new List<int>();
 
         // Used when there's no layer catalog: plain grey ash, light dust.
@@ -50,6 +55,9 @@ namespace Cinderbird.Terrain
 
         // Enough to keep all worker threads busy; a dig touches at most 8 chunks, so only start-up is split.
         private const int MeshBatchSize = 32;
+
+        // If the bake hasn't reported done by then, wait for it, so a collider is never more than this many frames late.
+        private const int MaxColliderLagFrames = 2;
 
         /// <summary>Fired after a dig with what it removed and the dug sphere (local center, radius).</summary>
         public event Action<DigResult, Vector3, float> Dug;
@@ -75,10 +83,13 @@ namespace Cinderbird.Terrain
         /// <summary>Milliseconds the last dig took in total, including re-meshing; for the performance overlay.</summary>
         public float LastDigMilliseconds { get; private set; }
 
-        /// <summary>Milliseconds the last re-mesh took (meshing plus collider baking).</summary>
+        /// <summary>Main-thread milliseconds of the last re-mesh (meshing and upload; colliders bake in the background).</summary>
         public float LastMeshMilliseconds { get; private set; }
 
         public int LastMeshedChunkCount { get; private set; }
+
+        /// <summary>Milliseconds the listeners of the last dig took (glimmers, scoop effects, HUD), on top of the dig itself.</summary>
+        public float LastDugListenersMilliseconds { get; private set; }
 
         /// <summary>The terrain data; null until <see cref="Build"/> has run.</summary>
         public AshTerrain Terrain => _terrain;
@@ -132,12 +143,13 @@ namespace Cinderbird.Terrain
             }
 
             CreateViews();
-            RebuildDirtyChunks();
+            RebuildDirtyChunks(true);
             Built?.Invoke();
         }
 
         private void OnDestroy()
         {
+            CompleteColliderBake();
             _mesher?.Dispose();
         }
 
@@ -169,7 +181,9 @@ namespace Cinderbird.Terrain
 
                 RebuildDirtyChunks();
                 LastDigMilliseconds = MillisecondsSince(started);
+                long listenersStarted = Stopwatch.GetTimestamp();
                 Dug?.Invoke(result, localCenter, radius);
+                LastDugListenersMilliseconds = MillisecondsSince(listenersStarted);
                 return result;
             }
         }
@@ -197,7 +211,7 @@ namespace Cinderbird.Terrain
                 return;
             }
 
-            RebuildDirtyChunks();
+            RebuildDirtyChunks(true);
             Restored?.Invoke();
         }
 
@@ -289,9 +303,10 @@ namespace Cinderbird.Terrain
             }
         }
 
-        // Meshes every changed chunk in parallel on worker threads, uploads the meshes, then bakes their colliders
-        // in parallel too. All of it finishes this frame, so the hole appears the moment you dig.
-        private void RebuildDirtyChunks()
+        // Meshes every changed chunk in parallel on worker threads and uploads the meshes this frame, so the hole
+        // appears the moment you dig; then starts baking their colliders in parallel in the background.
+        /// <param name="waitForColliders">Finish the colliders before returning (start-up, loading a save).</param>
+        private void RebuildDirtyChunks(bool waitForColliders = false)
         {
             _terrain.World.TakeDirtyChunks(_dirtyChunks);
             if (_dirtyChunks.Count == 0)
@@ -301,6 +316,7 @@ namespace Cinderbird.Terrain
 
             using (MeshMarker.Auto())
             {
+                CompleteColliderBake();
                 long started = Stopwatch.GetTimestamp();
                 // In batches: meshing all chunks at once (start-up) would hold tens of MB of job memory at the same time.
                 for (int first = 0; first < _dirtyChunks.Count; first += MeshBatchSize)
@@ -321,36 +337,65 @@ namespace Cinderbird.Terrain
                     _mesher.ReleaseResults();
                 }
 
-                BakeColliders();
+                StartColliderBake();
+                if (waitForColliders)
+                {
+                    CompleteColliderBake();
+                }
+
                 LastMeshMilliseconds = MillisecondsSince(started);
                 LastMeshedChunkCount = _dirtyChunks.Count;
             }
         }
 
-        private void BakeColliders()
+        // Baking collision data is the slowest part of re-meshing, and nothing needs it this very frame: the hole
+        // is visible at once and the collider catches up on the next frame, which nobody can notice.
+        private void Update()
+        {
+            if (_bakePending && (_bakeHandle.IsCompleted || Time.frameCount - _bakeStartFrame >= MaxColliderLagFrames))
+            {
+                CompleteColliderBake();
+            }
+        }
+
+        private void StartColliderBake()
         {
             _bakedChunks.Clear();
+            _pendingColliderChunks.Clear();
             foreach (int chunk in _dirtyChunks)
             {
+                _pendingColliderChunks.Add(chunk);
                 if (_views[chunk].HasTriangles)
                 {
                     _bakedChunks.Add(chunk);
                 }
             }
 
-            if (_bakedChunks.Count > 0)
+            _bakeIds = new NativeArray<EntityId>(_bakedChunks.Count, Allocator.Persistent);
+            for (int i = 0; i < _bakedChunks.Count; i++)
             {
-                NativeArray<EntityId> meshIds = new NativeArray<EntityId>(_bakedChunks.Count, Allocator.TempJob);
-                for (int i = 0; i < _bakedChunks.Count; i++)
-                {
-                    meshIds[i] = _views[_bakedChunks[i]].MeshId;
-                }
-
-                new BakeMeshJob { MeshIds = meshIds }.Schedule(meshIds.Length, 1).Complete();
-                meshIds.Dispose();
+                _bakeIds[i] = _views[_bakedChunks[i]].MeshId;
             }
 
-            foreach (int chunk in _dirtyChunks)
+            _bakeHandle = new BakeMeshJob { MeshIds = _bakeIds }.Schedule(_bakeIds.Length, 1);
+            // Start the workers now rather than whenever Unity next flushes its job queue.
+            JobHandle.ScheduleBatchedJobs();
+            _bakeStartFrame = Time.frameCount;
+            _bakePending = true;
+        }
+
+        // Also called before the next re-mesh: a mesh must not change while its collision data is being baked.
+        private void CompleteColliderBake()
+        {
+            if (!_bakePending)
+            {
+                return;
+            }
+
+            _bakeHandle.Complete();
+            _bakeIds.Dispose();
+            _bakePending = false;
+            foreach (int chunk in _pendingColliderChunks)
             {
                 _views[chunk].RefreshCollider();
             }

@@ -17,6 +17,8 @@ namespace Cinderbird.Terrain
         // Separate from _dirty: re-meshing clears dirty flags after every dig, but a save needs every chunk
         // changed since the mountain was generated.
         private readonly bool[] _modified;
+        // Counts writes per chunk, so a save can tell which chunks changed since it last copied them.
+        private readonly int[] _versions;
 
         public VoxelWorld(int chunkCells, int chunksX, int chunksY, int chunksZ, float cellSize, Vector3 origin)
         {
@@ -35,6 +37,7 @@ namespace Cinderbird.Terrain
             _chunks = new VoxelGrid[chunksX * chunksY * chunksZ];
             _dirty = new bool[_chunks.Length];
             _modified = new bool[_chunks.Length];
+            _versions = new int[_chunks.Length];
             for (int z = 0; z < chunksZ; z++)
             {
                 for (int y = 0; y < chunksY; y++)
@@ -115,6 +118,7 @@ namespace Cinderbird.Terrain
                         _chunks[index].SetDensity(x - cx * ChunkCells, y - cy * ChunkCells, z - cz * ChunkCells, density);
                         _dirty[index] = true;
                         _modified[index] = true;
+                        _versions[index]++;
                     }
                 }
             }
@@ -145,6 +149,7 @@ namespace Cinderbird.Terrain
                         _chunks[index].SetLayer(x - cx * ChunkCells, y - cy * ChunkCells, z - cz * ChunkCells, layer);
                         _dirty[index] = true;
                         _modified[index] = true;
+                        _versions[index]++;
                     }
                 }
             }
@@ -261,9 +266,17 @@ namespace Cinderbird.Terrain
             return _modified[index];
         }
 
+        /// <summary>Flags a chunk as changed, e.g. after its samples were overwritten directly when loading a save.</summary>
         public void MarkModified(int index)
         {
             _modified[index] = true;
+            _versions[index]++;
+        }
+
+        /// <summary>Goes up whenever the chunk's samples change; compare two readings to see if anything did.</summary>
+        public int VersionOf(int index)
+        {
+            return _versions[index];
         }
 
         /// <summary>Starts counting changes afresh, e.g. right after the mountain is generated.</summary>

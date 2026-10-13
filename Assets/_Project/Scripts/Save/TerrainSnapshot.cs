@@ -9,9 +9,11 @@ using UnityEngine;
 namespace Cinderbird.Save
 {
     /// <summary>
-    /// A copy of the mountain's changed chunks (ash densities, layers, buried embers). Taken on the main thread
-    /// in one quick pass; <see cref="Encode"/> only touches this copy, so it can run on a background thread
-    /// while the game keeps changing the terrain.
+    /// A copy of the mountain's changed chunks (ash densities, layers, buried embers), kept between saves:
+    /// <see cref="Update"/> re-copies only chunks that changed since it last ran, into the same buffers, so an
+    /// autosave stays cheap however much of the mountain has been dug. <see cref="Encode"/> only reads this copy,
+    /// so it can run on a background thread while the game keeps changing the terrain, as long as the next
+    /// <see cref="Update"/> waits for it to finish.
     /// Densities are stored as one signed byte each (-127..127 for -1..1): at most 1/254 off, far below anything
     /// visible, and a quarter of the size before compression.
     /// </summary>
@@ -21,15 +23,28 @@ namespace Cinderbird.Save
         private const int FormatVersion = 1;
         private const float QuantizeScale = 127f;
 
+        // Per chunk index (null / false where the chunk isn't in the snapshot).
+        // Densities are quantized and stored as raw bytes (two's complement sbytes) so they can be written as-is.
+        private readonly byte[][] _densities;
+        private readonly byte[][] _layers;
+        private readonly List<Ember>[] _embers;
+        private readonly int[] _copiedVersions;
+        private readonly bool[] _included;
         private readonly List<int> _chunkIndices = new List<int>();
-        // Quantized densities as raw bytes (two's complement sbytes), so they can be written without conversion.
-        private readonly List<byte[]> _densities = new List<byte[]>();
-        private readonly List<byte[]> _layers = new List<byte[]>();
-        private readonly List<Ember[]> _embers = new List<Ember[]>();
 
-        private TerrainSnapshot(int samplesPerChunk)
+        public TerrainSnapshot(int samplesPerChunk, int worldChunkCount)
         {
+            if (samplesPerChunk <= 0 || worldChunkCount <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(samplesPerChunk), "A snapshot needs a size.");
+            }
+
             SamplesPerChunk = samplesPerChunk;
+            _densities = new byte[worldChunkCount][];
+            _layers = new byte[worldChunkCount][];
+            _embers = new List<Ember>[worldChunkCount];
+            _copiedVersions = new int[worldChunkCount];
+            _included = new bool[worldChunkCount];
         }
 
         /// <summary>Samples in one chunk; a snapshot only fits worlds with the same chunk size.</summary>
@@ -37,42 +52,76 @@ namespace Cinderbird.Save
 
         public int ChunkCount => _chunkIndices.Count;
 
+        /// <summary>The chunks in the snapshot, in increasing order.</summary>
         public IReadOnlyList<int> ChunkIndices => _chunkIndices;
 
-        /// <summary>Copies every chunk whose ash or embers changed since the mountain was generated.</summary>
+        /// <summary>How many chunks the last <see cref="Update"/> actually copied; the rest were unchanged.</summary>
+        public int LastCopiedChunkCount { get; private set; }
+
+        /// <summary>A fresh snapshot of every chunk changed since the mountain was generated.</summary>
         public static TerrainSnapshot Capture(AshTerrain terrain)
         {
             VoxelWorld world = terrain.World;
-            TerrainSnapshot snapshot = new TerrainSnapshot(world.GetChunk(0).Densities.Length);
-            for (int i = 0; i < world.ChunkCount; i++)
+            TerrainSnapshot snapshot = new TerrainSnapshot(world.GetChunk(0).Densities.Length, world.ChunkCount);
+            snapshot.Update(terrain);
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Brings the snapshot up to date with the terrain, copying only chunks that changed since the last call.
+        /// Must not run while <see cref="Encode"/> is running on another thread.
+        /// </summary>
+        public void Update(AshTerrain terrain)
+        {
+            VoxelWorld world = terrain.World;
+            if (world.ChunkCount != _included.Length || world.GetChunk(0).Densities.Length != SamplesPerChunk)
+            {
+                throw new InvalidOperationException("This snapshot was made for a world of another size.");
+            }
+
+            LastCopiedChunkCount = 0;
+            _chunkIndices.Clear();
+            for (int i = 0; i < _included.Length; i++)
             {
                 if (!terrain.IsChunkModified(i))
                 {
+                    _included[i] = false;
                     continue;
                 }
 
-                VoxelGrid chunk = world.GetChunk(i);
-                float[] densities = chunk.Densities;
-                byte[] packed = new byte[densities.Length];
-                for (int s = 0; s < densities.Length; s++)
+                int version = terrain.ChangeVersionOf(i);
+                if (!_included[i] || _copiedVersions[i] != version)
                 {
-                    packed[s] = (byte)Quantize(densities[s]);
+                    CopyChunk(terrain, i);
+                    _copiedVersions[i] = version;
+                    _included[i] = true;
+                    LastCopiedChunkCount++;
                 }
 
-                EmberField field = terrain.EmbersIn(i);
-                Ember[] embers = new Ember[field.Count];
-                for (int e = 0; e < embers.Length; e++)
-                {
-                    embers[e] = field[e];
-                }
+                _chunkIndices.Add(i);
+            }
+        }
 
-                snapshot._chunkIndices.Add(i);
-                snapshot._densities.Add(packed);
-                snapshot._layers.Add((byte[])chunk.Layers.Clone());
-                snapshot._embers.Add(embers);
+        private void CopyChunk(AshTerrain terrain, int index)
+        {
+            VoxelGrid chunk = terrain.World.GetChunk(index);
+            float[] densities = chunk.Densities;
+            byte[] packed = _densities[index] ??= new byte[SamplesPerChunk];
+            for (int s = 0; s < densities.Length; s++)
+            {
+                packed[s] = (byte)Quantize(densities[s]);
             }
 
-            return snapshot;
+            byte[] layers = _layers[index] ??= new byte[SamplesPerChunk];
+            Array.Copy(chunk.Layers, layers, SamplesPerChunk);
+
+            List<Ember> embers = _embers[index] ??= new List<Ember>();
+            embers.Clear();
+            EmberField field = terrain.EmbersIn(index);
+            for (int e = 0; e < field.Count; e++)
+            {
+                embers.Add(field[e]);
+            }
         }
 
         public static sbyte Quantize(float density)
@@ -95,14 +144,14 @@ namespace Cinderbird.Save
                 writer.Write(FormatVersion);
                 writer.Write(SamplesPerChunk);
                 writer.Write(_chunkIndices.Count);
-                for (int c = 0; c < _chunkIndices.Count; c++)
+                foreach (int index in _chunkIndices)
                 {
-                    writer.Write(_chunkIndices[c]);
-                    writer.Write(_densities[c]);
-                    writer.Write(_layers[c]);
+                    writer.Write(index);
+                    writer.Write(_densities[index]);
+                    writer.Write(_layers[index]);
 
-                    Ember[] embers = _embers[c];
-                    writer.Write(embers.Length);
+                    List<Ember> embers = _embers[index];
+                    writer.Write(embers.Count);
                     foreach (Ember ember in embers)
                     {
                         writer.Write(ember.Position.x);
@@ -153,12 +202,23 @@ namespace Cinderbird.Save
                 throw new InvalidDataException("Terrain data has an impossible size.");
             }
 
-            TerrainSnapshot snapshot = new TerrainSnapshot(samplesPerChunk);
+            // Read everything first: the snapshot is sized by the highest chunk index it holds.
+            int[] indices = new int[chunkCount];
+            byte[][] densities = new byte[chunkCount][];
+            byte[][] layers = new byte[chunkCount][];
+            List<Ember>[] embers = new List<Ember>[chunkCount];
+            int highest = -1;
             for (int c = 0; c < chunkCount; c++)
             {
-                snapshot._chunkIndices.Add(reader.ReadInt32());
-                snapshot._densities.Add(ReadExactly(reader, samplesPerChunk));
-                snapshot._layers.Add(ReadExactly(reader, samplesPerChunk));
+                indices[c] = reader.ReadInt32();
+                if (indices[c] < 0 || (c > 0 && indices[c] <= indices[c - 1]))
+                {
+                    throw new InvalidDataException("Terrain data has chunks out of order.");
+                }
+
+                highest = indices[c];
+                densities[c] = ReadExactly(reader, samplesPerChunk);
+                layers[c] = ReadExactly(reader, samplesPerChunk);
 
                 int emberCount = reader.ReadInt32();
                 if (emberCount < 0)
@@ -166,16 +226,27 @@ namespace Cinderbird.Save
                     throw new InvalidDataException("Terrain data has a negative ember count.");
                 }
 
-                Ember[] embers = new Ember[emberCount];
+                List<Ember> chunkEmbers = new List<Ember>(emberCount);
                 for (int e = 0; e < emberCount; e++)
                 {
                     Vector3 position = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                     int tier = reader.ReadUInt16();
                     byte layer = reader.ReadByte();
-                    embers[e] = new Ember(position, tier, layer);
+                    chunkEmbers.Add(new Ember(position, tier, layer));
                 }
 
-                snapshot._embers.Add(embers);
+                embers[c] = chunkEmbers;
+            }
+
+            TerrainSnapshot snapshot = new TerrainSnapshot(samplesPerChunk, Math.Max(1, highest + 1));
+            for (int c = 0; c < chunkCount; c++)
+            {
+                int index = indices[c];
+                snapshot._densities[index] = densities[c];
+                snapshot._layers[index] = layers[c];
+                snapshot._embers[index] = embers[c];
+                snapshot._included[index] = true;
+                snapshot._chunkIndices.Add(index);
             }
 
             return snapshot;
@@ -202,7 +273,7 @@ namespace Cinderbird.Save
 
             foreach (int index in _chunkIndices)
             {
-                if (index < 0 || index >= world.ChunkCount)
+                if (index >= world.ChunkCount)
                 {
                     return false;
                 }
@@ -224,11 +295,10 @@ namespace Cinderbird.Save
                 throw new InvalidDataException("Terrain data doesn't match this world's size.");
             }
 
-            for (int c = 0; c < _chunkIndices.Count; c++)
+            foreach (int index in _chunkIndices)
             {
-                int index = _chunkIndices[c];
-                ApplyChunk(world, index, _densities[c], _layers[c]);
-                terrain.ReplaceEmbers(index, _embers[c]);
+                ApplyChunk(world, index, _densities[index], _layers[index]);
+                terrain.ReplaceEmbers(index, _embers[index]);
             }
 
             terrain.FinishRestore(_chunkIndices);

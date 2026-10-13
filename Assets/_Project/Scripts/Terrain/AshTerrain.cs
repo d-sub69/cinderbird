@@ -18,6 +18,7 @@ namespace Cinderbird.Terrain
         private readonly EmberField[] _embers;
         // Chunks whose embers changed since generation; a dig can take embers without changing any sample.
         private readonly bool[] _embersChanged;
+        private readonly int[] _emberVersions;
         private readonly List<int> _chunkScratch = new List<int>();
 
         public AshTerrain(VoxelWorld world, int layerCount = 1)
@@ -25,6 +26,7 @@ namespace Cinderbird.Terrain
             World = world;
             Locks = new LayerLocks(layerCount);
             _embersChanged = new bool[world.ChunkCount];
+            _emberVersions = new int[world.ChunkCount];
             _embers = new EmberField[world.ChunkCount];
             for (int i = 0; i < _embers.Length; i++)
             {
@@ -66,6 +68,16 @@ namespace Cinderbird.Terrain
         public void ReplaceEmbers(int chunkIndex, IReadOnlyList<Ember> embers)
         {
             _embers[chunkIndex].ReplaceWith(embers);
+            _emberVersions[chunkIndex]++;
+        }
+
+        /// <summary>
+        /// Goes up whenever the chunk's ash or embers change (both counters only ever grow, so their sum does too).
+        /// A save compares readings to copy only the chunks that changed since it last looked.
+        /// </summary>
+        public int ChangeVersionOf(int chunkIndex)
+        {
+            return World.VersionOf(chunkIndex) + _emberVersions[chunkIndex];
         }
 
         /// <summary>
@@ -149,6 +161,7 @@ namespace Cinderbird.Terrain
                 if (extracted > 0)
                 {
                     _embersChanged[chunk] = true;
+                    _emberVersions[chunk]++;
                     emberCount += extracted;
                 }
             }

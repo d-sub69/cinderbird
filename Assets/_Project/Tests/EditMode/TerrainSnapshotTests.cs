@@ -238,5 +238,58 @@ namespace Cinderbird.Tests.EditMode
             Assert.That(snapshot.ChunkCount, Is.EqualTo(1));
             Assert.That(snapshot.Encode().Length, Is.LessThan(raw / 2), "Packed data should be much smaller than raw bytes");
         }
+
+        [Test]
+        public void Update_WithoutChanges_CopiesNothing()
+        {
+            AshTerrain terrain = CreateTerrain();
+            DigAtSeam(terrain);
+            TerrainSnapshot snapshot = TerrainSnapshot.Capture(terrain);
+            Assert.That(snapshot.LastCopiedChunkCount, Is.EqualTo(snapshot.ChunkCount));
+
+            snapshot.Update(terrain);
+
+            Assert.That(snapshot.LastCopiedChunkCount, Is.Zero);
+            Assert.That(snapshot.ChunkCount, Is.GreaterThan(0), "Unchanged chunks stay in the snapshot");
+        }
+
+        [Test]
+        public void Update_AfterAnotherDig_CopiesOnlyWhatChanged_AndStaysCurrent()
+        {
+            AshTerrain terrain = CreateTerrain();
+            DigAtSeam(terrain);
+            TerrainSnapshot snapshot = TerrainSnapshot.Capture(terrain);
+
+            // Inside the first chunk only, away from its shared borders.
+            terrain.Dig(new Vector3(-0.8f, 0.9f, -0.8f), 0.3f, new List<Ember>());
+            snapshot.Update(terrain);
+
+            Assert.That(snapshot.LastCopiedChunkCount, Is.LessThan(snapshot.ChunkCount), "Untouched chunks aren't copied again");
+
+            AshTerrain fresh = CreateTerrain();
+            RoundTrip(snapshot).ApplyTo(fresh);
+            VoxelWorld a = terrain.World;
+            VoxelWorld b = fresh.World;
+            for (int z = 0; z < a.SamplesZ; z++)
+            {
+                for (int y = 0; y < a.SamplesY; y++)
+                {
+                    for (int x = 0; x < a.SamplesX; x++)
+                    {
+                        Assert.That(b.GetDensity(x, y, z), Is.EqualTo(a.GetDensity(x, y, z)).Within(QuantizeError), $"Density at ({x},{y},{z})");
+                    }
+                }
+            }
+
+            Assert.That(fresh.BuriedEmberCount, Is.EqualTo(terrain.BuriedEmberCount));
+        }
+
+        [Test]
+        public void Update_WorldOfAnotherSize_Throws()
+        {
+            TerrainSnapshot snapshot = TerrainSnapshot.Capture(CreateTerrain(3));
+
+            Assert.Throws<System.InvalidOperationException>(() => snapshot.Update(CreateTerrain(1)));
+        }
     }
 }

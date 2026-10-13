@@ -249,7 +249,7 @@ namespace Cinderbird.UI
             BasketContents basket = _basket.Contents;
             _builder.Clear();
 
-            _builder.Append("Sieve: ").Append((sieve.AshVolume * 1000f).ToString("F0")).Append(" L ash");
+            _builder.Append("Sieve: ").AppendFixed(sieve.AshVolume * 1000f, 0).Append(" L ash");
             if (sieve.HasAsh)
             {
                 _builder.Append("  (shake before scooping)");
@@ -260,7 +260,7 @@ namespace Cinderbird.UI
             }
             if (_shownEnergy > 0f)
             {
-                _builder.Append("  Shaking ").Append(Mathf.RoundToInt(_shownEnergy * 100f)).Append('%');
+                _builder.Append("  Shaking ").AppendInt(Mathf.RoundToInt(_shownEnergy * 100f)).Append('%');
             }
 
             _builder.AppendLine();
@@ -271,30 +271,30 @@ namespace Cinderbird.UI
             }
             else
             {
-                _builder.Append("Embers in sieve: ").Append(sieve.Embers.Count);
+                _builder.Append("Embers in sieve: ").AppendInt(sieve.Embers.Count);
                 if (sieve.EmberCapacity < int.MaxValue)
                 {
-                    _builder.Append('/').Append(sieve.EmberCapacity);
+                    _builder.Append('/').AppendInt(sieve.EmberCapacity);
                 }
                 AppendTierBreakdown(sieve.Embers);
             }
 
             _builder.AppendLine();
 
-            _builder.Append("Basket: ").Append(basket.Embers.Count).Append('/').Append(basket.Capacity)
-                .Append(" embers (Glow ").Append(TotalGlow(basket.Embers)).Append(')');
+            _builder.Append("Basket: ").AppendInt(basket.Embers.Count).Append('/').AppendInt(basket.Capacity)
+                .Append(" embers (Glow ").AppendInt(TotalGlow(basket.Embers)).Append(')');
             AppendTierBreakdown(basket.Embers);
             _builder.AppendLine();
 
-            _builder.Append("Pile: ").Append(_pileVolume.ToString("F2")).Append(" m³, ")
-                .Append(_pile.BuriedEmberCount).Append(" embers buried, open down to the ")
+            _builder.Append("Pile: ").AppendFixed(_pileVolume, 2).Append(" m³, ")
+                .AppendInt(_pile.BuriedEmberCount).Append(" embers buried, open down to the ")
                 .Append(_pile.LayerName(_pile.DeepestUnlockedLayer));
             _builder.AppendLine();
 
             Currencies currencies = _wallet.Currencies;
-            _builder.Append("Glow ").Append(currencies.Glow)
-                .Append("   Heat ").Append(currencies.Heat).Append(" / ").Append(_nest.HeatGoal)
-                .Append(" (").Append(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
+            _builder.Append("Glow ").AppendInt(currencies.Glow)
+                .Append("   Heat ").AppendInt(currencies.Heat).Append(" / ").AppendInt(_nest.HeatGoal)
+                .Append(" (").AppendInt(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
 
             AppendPourPrompt();
             AppendPickUpPrompt();
@@ -326,7 +326,7 @@ namespace Cinderbird.UI
 
             _builder.Append("Q: pour the ").Append(tool.DisplayName.ToLowerInvariant())
                 .Append(" into ").Append(target.DisplayName)
-                .Append(" (").Append(_toolBelt.ActiveSource.EmberCount).Append(" embers)");
+                .Append(" (").AppendInt(_toolBelt.ActiveSource.EmberCount).Append(" embers)");
         }
 
         private void AppendPickUpPrompt()
@@ -341,7 +341,7 @@ namespace Cinderbird.UI
             IEmberHolder holder = tool.GetComponent<IEmberHolder>();
             if (holder != null)
             {
-                _builder.Append(" (").Append(holder.Source.EmberCount).Append(" embers)");
+                _builder.Append(" (").AppendInt(holder.Source.EmberCount).Append(" embers)");
             }
         }
 
@@ -392,7 +392,7 @@ namespace Cinderbird.UI
             {
                 if (_tierCounts[i] > 0 && _tierCatalog[i] != null)
                 {
-                    _builder.Append("  ").Append(_tierCatalog[i].DisplayName).Append(' ').Append(_tierCounts[i]);
+                    _builder.Append("  ").Append(_tierCatalog[i].DisplayName).Append(' ').AppendInt(_tierCounts[i]);
                 }
             }
         }
