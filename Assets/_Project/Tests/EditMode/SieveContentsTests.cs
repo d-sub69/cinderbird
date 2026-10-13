@@ -242,5 +242,37 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.Throws<ArgumentOutOfRangeException>(() => sieve.TryAdd(-1f, Embers(0)));
         }
+
+        [Test]
+        public void Restore_ReplacesEverything_AndFiresChangedOnce()
+        {
+            SieveContents sieve = new SieveContents();
+            sieve.TryAdd(0.1f, Embers(3));
+            int changes = 0;
+            sieve.Changed += () => changes++;
+            Color ash = new Color(0.6f, 0.3f, 0.2f, 1f);
+            Color dust = new Color(0.9f, 0.7f, 0.6f, 0.8f);
+
+            sieve.Restore(0.05f, 0.2f, ash, dust, Embers(1));
+
+            Assert.That(sieve.AshVolume, Is.EqualTo(0.05f));
+            Assert.That(sieve.LoadVolume, Is.EqualTo(0.2f));
+            Assert.That(sieve.AshFraction, Is.EqualTo(0.25f).Within(1e-5f));
+            Assert.That(sieve.AshColor, Is.EqualTo(ash));
+            Assert.That(sieve.DustColor, Is.EqualTo(dust));
+            Assert.That(sieve.EmberCount, Is.EqualTo(1));
+            Assert.That(changes, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Restore_LoadSmallerThanAsh_IsRaised()
+        {
+            SieveContents sieve = new SieveContents();
+
+            sieve.Restore(0.1f, 0f, Color.grey, Color.grey, Embers(0));
+
+            Assert.That(sieve.LoadVolume, Is.EqualTo(0.1f));
+            Assert.That(sieve.AshFraction, Is.EqualTo(1f));
+        }
     }
 }

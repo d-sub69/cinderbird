@@ -25,6 +25,9 @@ namespace Cinderbird.Nest
         /// <summary>Fired after a feeding with what it earned, the embers that went in, and where they came from.</summary>
         public event Action<FeedResult, IReadOnlyList<Ember>, Vector3> Fed;
 
+        /// <summary>Fired when a save sets the Heat directly (the new total), so views can catch up without a flare.</summary>
+        public event Action<int> HeatRestored;
+
         public string DisplayName => "the nest";
 
         public IEmberSink Sink => _intake;
@@ -52,7 +55,29 @@ namespace Cinderbird.Nest
             _intake = new NestIntake(_wallet.Currencies, _glowByTier, _heatByTier);
         }
 
-        // Start, not Awake: the pile spawns its embers in its own Awake.
+        private void OnEnable()
+        {
+            if (_intake != null)
+            {
+                _wallet.Currencies.Restored += OnCurrenciesRestored;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (_intake != null)
+            {
+                _wallet.Currencies.Restored -= OnCurrenciesRestored;
+            }
+        }
+
+        private void OnCurrenciesRestored()
+        {
+            HeatRestored?.Invoke(_wallet.Currencies.Heat);
+        }
+
+        // Start, not Awake: the pile spawns its embers in its own Awake. A save is applied after this
+        // (SaveController runs late), so the goal is always the fresh mountain's total.
         private void Start()
         {
             if (_pile.Terrain == null)

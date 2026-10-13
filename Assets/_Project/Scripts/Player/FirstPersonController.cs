@@ -39,6 +39,32 @@ namespace Cinderbird.Player
         private float _capsuleBottom;
         private float _eyeBelowTop;
 
+        /// <summary>Where the player is and looks right now; default before Awake has run.</summary>
+        public PlayerPose Pose => _motor == null
+            ? default
+            : new PlayerPose(transform.position, _look.Yaw, _look.Pitch, _crouch.IsCrouching);
+
+        /// <summary>Moves the player to a saved pose. If crouch isn't held, they stand up once there's headroom.</summary>
+        public void RestorePose(PlayerPose pose)
+        {
+            if (_motor == null)
+            {
+                return;
+            }
+
+            // A CharacterController overrides direct position changes while enabled.
+            _characterController.enabled = false;
+            transform.position = pose.Position;
+            _characterController.enabled = true;
+
+            _look.Set(pose.Yaw, pose.Pitch);
+            transform.localRotation = Quaternion.Euler(0f, _look.Yaw, 0f);
+            _cameraPivot.localRotation = Quaternion.Euler(_look.Pitch, 0f, 0f);
+
+            _crouch.SnapTo(pose.Crouching);
+            ApplyHeight(_crouch.Height);
+        }
+
         private void Awake()
         {
             _characterController = GetComponent<CharacterController>();

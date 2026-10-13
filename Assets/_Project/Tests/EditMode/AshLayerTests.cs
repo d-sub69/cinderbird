@@ -244,5 +244,33 @@ namespace Cinderbird.Tests.EditMode
             Assert.That(seen, Does.Contain(Color.red), "Surface should show the crust");
             Assert.That(seen, Does.Contain(Color.green), "The cut should expose the second layer");
         }
+
+        [Test]
+        public void Locks_UnlockThrough_OpensEverythingUpToIt_Clamped()
+        {
+            LayerLocks locks = new LayerLocks(4);
+
+            locks.UnlockThrough(2);
+            Assert.That(locks.DeepestUnlocked, Is.EqualTo(2));
+
+            locks.UnlockThrough(10);
+            Assert.That(locks.DeepestUnlocked, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void World_TracksModifiedChunks_UntilCleared()
+        {
+            AshTerrain terrain = CreateLayeredTerrain();
+            for (int i = 0; i < terrain.World.ChunkCount; i++)
+            {
+                Assert.That(terrain.IsChunkModified(i), Is.False, "Generation doesn't count as a change");
+            }
+
+            terrain.Dig(new Vector3(0f, 1.7f, 0f), 0.2f, new List<Ember>());
+
+            Assert.That(terrain.IsChunkModified(terrain.World.ChunkIndexAt(new Vector3(0f, 1.7f, 0f))), Is.True);
+            terrain.World.ClearModified();
+            Assert.That(terrain.World.IsModified(terrain.World.ChunkIndexAt(new Vector3(0f, 1.7f, 0f))), Is.False);
+        }
     }
 }

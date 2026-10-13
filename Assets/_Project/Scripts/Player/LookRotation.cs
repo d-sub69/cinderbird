@@ -21,6 +21,13 @@ namespace Cinderbird.Player
         /// <summary>Degrees around the right axis; negative looks up (Unity's convention).</summary>
         public float Pitch { get; private set; }
 
+        /// <summary>Jumps straight to a direction, e.g. a saved one; pitch is clamped like any other look.</summary>
+        public void Set(float yaw, float pitch)
+        {
+            Yaw = Mathf.Repeat(yaw, 360f);
+            Pitch = Mathf.Clamp(pitch, -_maxPitch, _maxPitch);
+        }
+
         /// <param name="lookDelta">Mouse delta in pixels this frame. Not scaled by deltaTime:
         /// the delta is already "how far the mouse moved", so scaling would make look speed frame-rate dependent.</param>
         /// <param name="sensitivity">Degrees per pixel.</param>

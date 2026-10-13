@@ -37,6 +37,7 @@ namespace Cinderbird.Nest
             if (_fire != null)
             {
                 _pourEffect.EmberLanded += OnEmberLanded;
+                _nest.HeatRestored += OnHeatRestored;
             }
         }
 
@@ -45,7 +46,13 @@ namespace Cinderbird.Nest
             if (_fire != null)
             {
                 _pourEffect.EmberLanded -= OnEmberLanded;
+                _nest.HeatRestored -= OnHeatRestored;
             }
+        }
+
+        private void OnHeatRestored(int heat)
+        {
+            _landedHeat = heat;
         }
 
         private void Update()

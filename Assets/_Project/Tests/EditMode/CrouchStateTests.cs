@@ -87,5 +87,18 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(state.Height, Is.EqualTo(Stand));
         }
+
+        [Test]
+        public void SnapTo_JumpsWithoutTransition()
+        {
+            CrouchState state = Create();
+
+            state.SnapTo(true);
+            Assert.That(state.Height, Is.EqualTo(Crouch));
+            Assert.That(state.IsCrouching, Is.True);
+
+            state.SnapTo(false);
+            Assert.That(state.Height, Is.EqualTo(Stand));
+        }
     }
 }

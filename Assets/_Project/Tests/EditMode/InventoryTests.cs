@@ -186,5 +186,34 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(changes, Is.EqualTo(3));
         }
+
+        [Test]
+        public void Restore_SetsSlotsAndActive_FiringOnce()
+        {
+            Inventory<string> inventory = WithItems(4, "sieve", "basket");
+            int changes = 0;
+            inventory.Changed += () => changes++;
+
+            inventory.Restore(new[] { null, "basket", null, "sieve" }, 3);
+
+            Assert.That(inventory[0], Is.Null);
+            Assert.That(inventory[1], Is.EqualTo("basket"));
+            Assert.That(inventory[3], Is.EqualTo("sieve"));
+            Assert.That(inventory.Active, Is.EqualTo("sieve"));
+            Assert.That(changes, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Restore_DropsRepeatsAndExtras_AndBadActiveSlot()
+        {
+            Inventory<string> inventory = new Inventory<string>(2);
+
+            inventory.Restore(new[] { "sieve", "sieve", "basket" }, 9);
+
+            Assert.That(inventory[0], Is.EqualTo("sieve"));
+            Assert.That(inventory[1], Is.Null, "A repeat of an item is dropped");
+            Assert.That(inventory.IndexOf("basket"), Is.EqualTo(-1), "Beyond the capacity");
+            Assert.That(inventory.ActiveSlot, Is.Zero);
+        }
     }
 }

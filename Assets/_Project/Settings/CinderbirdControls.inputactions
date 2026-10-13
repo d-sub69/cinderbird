@@ -185,6 +185,36 @@
                     "interactions": "",
                     "initialStateCheck": false,
                     "priority": 0
+                },
+                {
+                    "name": "SaveGame",
+                    "type": "Button",
+                    "id": "1f8ce144-e149-4533-9ecd-0011b8b8591c",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "LoadSave",
+                    "type": "Button",
+                    "id": "60109df7-5a86-4f5c-a1e1-ab62036ba648",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                },
+                {
+                    "name": "ResetSave",
+                    "type": "Button",
+                    "id": "6d2eb713-4b26-4801-9afd-fa13781e6305",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
                 }
             ],
             "bindings": [
@@ -603,6 +633,39 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "UnlockNextLayer",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "e368384c-069b-4764-a281-7b5dc163d121",
+                    "path": "<Keyboard>/f5",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "SaveGame",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "dde04a67-c26f-433c-99fb-8cecfac88d9c",
+                    "path": "<Keyboard>/f9",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "LoadSave",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c10e5d33-96bc-4b8c-a111-c78fef4ddfa9",
+                    "path": "<Keyboard>/f8",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "ResetSave",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

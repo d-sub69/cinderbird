@@ -77,6 +77,21 @@ namespace Cinderbird.Sifting
             return count;
         }
 
+        /// <summary>Replaces the contents with a saved state, keeping only as many embers as fit.</summary>
+        /// <returns>How many saved embers didn't fit (e.g. the capacity was lowered since the save).</returns>
+        public int Restore(IReadOnlyList<Ember> embers)
+        {
+            _embers.Clear();
+            int kept = Math.Min(embers.Count, Capacity);
+            for (int i = 0; i < kept; i++)
+            {
+                _embers.Add(embers[i]);
+            }
+
+            Changed?.Invoke();
+            return embers.Count - kept;
+        }
+
         /// <exception cref="InvalidOperationException">When the embers don't fit; check <see cref="FreeSpace"/> first.</exception>
         public void Add(List<Ember> embers)
         {

@@ -114,5 +114,28 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(changes, Is.EqualTo(1));
         }
+
+        [Test]
+        public void Restore_ReplacesTheContents()
+        {
+            BasketContents basket = new BasketContents(5);
+            basket.Add(Embers(4));
+
+            int dropped = basket.Restore(Embers(2));
+
+            Assert.That(dropped, Is.Zero);
+            Assert.That(basket.EmberCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Restore_MoreThanFits_KeepsWhatFits()
+        {
+            BasketContents basket = new BasketContents(3);
+
+            int dropped = basket.Restore(Embers(5));
+
+            Assert.That(dropped, Is.EqualTo(2));
+            Assert.That(basket.IsFull, Is.True);
+        }
     }
 }

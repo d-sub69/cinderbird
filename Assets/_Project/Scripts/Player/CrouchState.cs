@@ -28,6 +28,12 @@ namespace Cinderbird.Player
         /// <summary>True whenever the player isn't fully upright, including mid-transition.</summary>
         public bool IsCrouching => Height < _standHeight - Epsilon;
 
+        /// <summary>Jumps straight to fully crouched or standing, e.g. when loading a save.</summary>
+        public void SnapTo(bool crouching)
+        {
+            Height = crouching ? _crouchHeight : _standHeight;
+        }
+
         /// <param name="canStand">Whether there is room above to grow taller this frame.</param>
         public void Tick(bool wantsCrouch, bool canStand, float deltaTime)
         {

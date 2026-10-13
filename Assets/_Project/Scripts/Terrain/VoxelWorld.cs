@@ -8,12 +8,15 @@ namespace Cinderbird.Terrain
     /// The whole diggable terrain as a block of chunks, each its own <see cref="VoxelGrid"/>. Neighboring
     /// chunks share their border samples (a chunk of N cells has N + 1 samples per axis, and the last one is
     /// also the next chunk's first), so their meshes meet without cracks. Writes update every copy of a sample
-    /// and mark the affected chunks dirty for re-meshing. Addressed by global sample index.
+    /// and mark the affected chunks dirty for re-meshing and modified for saving. Addressed by global sample index.
     /// </summary>
     public sealed class VoxelWorld : IDensityField
     {
         private readonly VoxelGrid[] _chunks;
         private readonly bool[] _dirty;
+        // Separate from _dirty: re-meshing clears dirty flags after every dig, but a save needs every chunk
+        // changed since the mountain was generated.
+        private readonly bool[] _modified;
 
         public VoxelWorld(int chunkCells, int chunksX, int chunksY, int chunksZ, float cellSize, Vector3 origin)
         {
@@ -31,6 +34,7 @@ namespace Cinderbird.Terrain
 
             _chunks = new VoxelGrid[chunksX * chunksY * chunksZ];
             _dirty = new bool[_chunks.Length];
+            _modified = new bool[_chunks.Length];
             for (int z = 0; z < chunksZ; z++)
             {
                 for (int y = 0; y < chunksY; y++)
@@ -110,6 +114,7 @@ namespace Cinderbird.Terrain
                         int index = ChunkIndex(cx, cy, cz);
                         _chunks[index].SetDensity(x - cx * ChunkCells, y - cy * ChunkCells, z - cz * ChunkCells, density);
                         _dirty[index] = true;
+                        _modified[index] = true;
                     }
                 }
             }
@@ -139,6 +144,7 @@ namespace Cinderbird.Terrain
                         int index = ChunkIndex(cx, cy, cz);
                         _chunks[index].SetLayer(x - cx * ChunkCells, y - cy * ChunkCells, z - cz * ChunkCells, layer);
                         _dirty[index] = true;
+                        _modified[index] = true;
                     }
                 }
             }
@@ -242,6 +248,28 @@ namespace Cinderbird.Terrain
                     }
                 }
             }
+        }
+
+        public void MarkDirty(int index)
+        {
+            _dirty[index] = true;
+        }
+
+        /// <summary>Whether a chunk has been written to since the last <see cref="ClearModified"/>.</summary>
+        public bool IsModified(int index)
+        {
+            return _modified[index];
+        }
+
+        public void MarkModified(int index)
+        {
+            _modified[index] = true;
+        }
+
+        /// <summary>Starts counting changes afresh, e.g. right after the mountain is generated.</summary>
+        public void ClearModified()
+        {
+            Array.Clear(_modified, 0, _modified.Length);
         }
 
         public void MarkAllDirty()

@@ -31,6 +31,8 @@ namespace Cinderbird.Terrain
         /// <summary>Local position of the pocket's center, relative to the mountain's base center.</summary>
         public Vector3 PocketCenter => new Vector3(0f, _pocketHeight, 0f);
 
+        public float PocketRadius => _pocketRadius;
+
         public LayerLayout CreateLayout()
         {
             // Every layer but the last is a shell by depth; the last is the pocket.

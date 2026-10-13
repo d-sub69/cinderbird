@@ -9,6 +9,9 @@ namespace Cinderbird.Economy
     {
         public event Action Changed;
 
+        /// <summary>Fired after <see cref="Restore"/>, for views that count earnings as they arrive (e.g. the nest fire).</summary>
+        public event Action Restored;
+
         public int Glow { get; private set; }
 
         public int Heat { get; private set; }
@@ -29,6 +32,20 @@ namespace Cinderbird.Economy
             Glow += glow;
             Heat += heat;
             Changed?.Invoke();
+        }
+
+        /// <summary>Sets both counters to saved values.</summary>
+        public void Restore(int glow, int heat)
+        {
+            if (glow < 0 || heat < 0)
+            {
+                throw new ArgumentOutOfRangeException(glow < 0 ? nameof(glow) : nameof(heat), "Saved amounts cannot be negative.");
+            }
+
+            Glow = glow;
+            Heat = heat;
+            Changed?.Invoke();
+            Restored?.Invoke();
         }
     }
 }

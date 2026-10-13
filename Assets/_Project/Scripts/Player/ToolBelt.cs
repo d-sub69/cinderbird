@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cinderbird.Embers;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -80,6 +81,61 @@ namespace Cinderbird.Player
 
             Inventory.Select(slot);
             return true;
+        }
+
+        /// <summary>Saved name of a tool. Asset names are stable as long as the tool assets aren't renamed.</summary>
+        public static string IdOf(ToolDefinition tool)
+        {
+            return tool != null ? tool.name : string.Empty;
+        }
+
+        /// <summary>The starting tool with a saved name, or null if this belt doesn't have it.</summary>
+        public ToolDefinition FindTool(string id)
+        {
+            if (string.IsNullOrEmpty(id) || _tools == null)
+            {
+                return null;
+            }
+
+            foreach (HeldToolBinding binding in _tools)
+            {
+                if (binding.Tool != null && binding.Tool.name == id)
+                {
+                    return binding.Tool;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Replaces the inventory with saved slots and shows the active tool at once (no swap animation).
+        /// Starting tools that are neither in the slots nor in <paramref name="outInWorld"/> go back into a free
+        /// slot, so a tool added after the save was made is never lost.
+        /// </summary>
+        public void RestoreSlots(IReadOnlyList<ToolDefinition> slots, int activeSlot, ICollection<ToolDefinition> outInWorld)
+        {
+            if (_tools == null)
+            {
+                return;
+            }
+
+            Inventory.Restore(slots, activeSlot);
+            foreach (HeldToolBinding binding in _tools)
+            {
+                if (binding.Tool != null && Inventory.IndexOf(binding.Tool) < 0 && !outInWorld.Contains(binding.Tool))
+                {
+                    Inventory.TryAdd(binding.Tool, out _);
+                }
+            }
+
+            _swapStartTime = -1f;
+            if (_hands != null)
+            {
+                _hands.localPosition = _handsRestPosition;
+            }
+
+            ShowOnly(Inventory.Active);
         }
 
         private void Awake()

@@ -1305,6 +1305,64 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &354520937
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 354520939}
+  - component: {fileID: 354520938}
+  m_Layer: 0
+  m_Name: SaveSystem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &354520938
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 354520937}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b412b14c24fc9974a86567099443ad53, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Save.SaveController
+  _settings: {fileID: 11400000, guid: ea4e49099cfd9d749a94471419c7fdf0, type: 2}
+  _pile: {fileID: 273172401}
+  _wallet: {fileID: 1069582113}
+  _nest: {fileID: 1752160253}
+  _player: {fileID: 1069582109}
+  _toolBelt: {fileID: 1069582114}
+  _sieve: {fileID: 3195221}
+  _sieveFiller: {fileID: 3195228}
+  _basket: {fileID: 1372843414}
+  _placeableTools:
+  - {fileID: 1372843418}
+  _saveAction: {fileID: 4872094074733735819, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
+  _loadAction: {fileID: 1108689290045709862, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
+  _resetAction: {fileID: -904051574137934914, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
+--- !u!4 &354520939
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 354520937}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &368888272
 GameObject:
   m_ObjectHideFlags: 0
@@ -8398,6 +8456,7 @@ MonoBehaviour:
   _nest: {fileID: 1752160253}
   _pile: {fileID: 273172401}
   _tierCatalog: {fileID: 11400000, guid: d4be10cff6273e548820db03d0c2bdd1, type: 2}
+  _save: {fileID: 354520938}
 --- !u!114 &1533965563
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11562,3 +11621,4 @@ SceneRoots:
   - {fileID: 1752160250}
   - {fileID: 159120004}
   - {fileID: 873793425}
+  - {fileID: 354520939}

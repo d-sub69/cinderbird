@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Cinderbird.Embers;
 using UnityEngine;
@@ -15,12 +16,15 @@ namespace Cinderbird.Terrain
         private const int ChunkSeedStride = 7919;
 
         private readonly EmberField[] _embers;
+        // Chunks whose embers changed since generation; a dig can take embers without changing any sample.
+        private readonly bool[] _embersChanged;
         private readonly List<int> _chunkScratch = new List<int>();
 
         public AshTerrain(VoxelWorld world, int layerCount = 1)
         {
             World = world;
             Locks = new LayerLocks(layerCount);
+            _embersChanged = new bool[world.ChunkCount];
             _embers = new EmberField[world.ChunkCount];
             for (int i = 0; i < _embers.Length; i++)
             {
@@ -49,6 +53,46 @@ namespace Cinderbird.Terrain
             AshPileGenerator.Generate(World, shape, layout);
             TotalAshVolume = World.TotalAshVolume();
             World.MarkAllDirty();
+            ClearModified();
+        }
+
+        /// <summary>Whether a chunk's ash or embers changed since generation, i.e. whether a save needs it.</summary>
+        public bool IsChunkModified(int chunkIndex)
+        {
+            return World.IsModified(chunkIndex) || _embersChanged[chunkIndex];
+        }
+
+        /// <summary>Replaces a chunk's buried embers with saved ones. Call <see cref="FinishRestore"/> afterwards.</summary>
+        public void ReplaceEmbers(int chunkIndex, IReadOnlyList<Ember> embers)
+        {
+            _embers[chunkIndex].ReplaceWith(embers);
+        }
+
+        /// <summary>
+        /// After restoring saved chunks: only those count as modified (the restore itself touches their
+        /// neighbors' shared borders), and the running totals are recounted.
+        /// </summary>
+        public void FinishRestore(IReadOnlyList<int> restoredChunks)
+        {
+            ClearModified();
+            for (int i = 0; i < restoredChunks.Count; i++)
+            {
+                World.MarkModified(restoredChunks[i]);
+                _embersChanged[restoredChunks[i]] = true;
+            }
+
+            TotalAshVolume = World.TotalAshVolume();
+            BuriedEmberCount = 0;
+            for (int i = 0; i < _embers.Length; i++)
+            {
+                BuriedEmberCount += _embers[i].Count;
+            }
+        }
+
+        private void ClearModified()
+        {
+            World.ClearModified();
+            Array.Clear(_embersChanged, 0, _embersChanged.Length);
         }
 
         /// <summary>Scatters embers chunk by chunk using each ash layer's own rate and tiers.</summary>
@@ -100,7 +144,13 @@ namespace Cinderbird.Terrain
             int emberCount = 0;
             for (int i = 0; i < _chunkScratch.Count; i++)
             {
-                emberCount += _embers[_chunkScratch[i]].ExtractWithin(center, radius, extractedEmbers, Locks);
+                int chunk = _chunkScratch[i];
+                int extracted = _embers[chunk].ExtractWithin(center, radius, extractedEmbers, Locks);
+                if (extracted > 0)
+                {
+                    _embersChanged[chunk] = true;
+                    emberCount += extracted;
+                }
             }
 
             TotalAshVolume -= carve.RemovedVolume;

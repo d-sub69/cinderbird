@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Cinderbird.Player
 {
@@ -71,6 +72,26 @@ namespace Cinderbird.Player
             _slots[slot] = null;
             Changed?.Invoke();
             return true;
+        }
+
+        /// <summary>
+        /// Replaces every slot with saved contents (null = empty) and selects the saved active slot. Extra entries
+        /// beyond the capacity and repeats of an item are dropped; fires <see cref="Changed"/> once.
+        /// </summary>
+        public void Restore(IReadOnlyList<T> slots, int activeSlot)
+        {
+            Array.Clear(_slots, 0, _slots.Length);
+            for (int i = 0; i < slots.Count && i < _slots.Length; i++)
+            {
+                T item = slots[i];
+                if (item != null && IndexOf(item) < 0)
+                {
+                    _slots[i] = item;
+                }
+            }
+
+            ActiveSlot = activeSlot >= 0 && activeSlot < _slots.Length ? activeSlot : 0;
+            Changed?.Invoke();
         }
 
         public int IndexOf(T item)

@@ -37,6 +37,16 @@ namespace Cinderbird.Embers
             _embers.AddRange(embers);
         }
 
+        /// <summary>Swaps the contents for another set, e.g. the embers from a save.</summary>
+        public void ReplaceWith(IReadOnlyList<Ember> embers)
+        {
+            _embers.Clear();
+            for (int i = 0; i < embers.Count; i++)
+            {
+                _embers.Add(embers[i]);
+            }
+        }
+
         /// <summary>
         /// Moves every ember within the sphere into <paramref name="output"/> (appended, not cleared).
         /// </summary>

@@ -4,6 +4,7 @@ using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
 using Cinderbird.Player;
+using Cinderbird.Save;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
 using TMPro;
@@ -36,6 +37,8 @@ namespace Cinderbird.UI
         [SerializeField] private NestController _nest;
         [SerializeField] private VoxelTerrain _pile;
         [SerializeField] private EmberTierCatalog _tierCatalog;
+        [Tooltip("Optional: shows save and load messages.")]
+        [SerializeField] private SaveController _save;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -76,6 +79,11 @@ namespace Cinderbird.UI
             _pile.Dug += OnDug;
             _pile.DigBlocked += OnDigBlocked;
             _pile.LayerUnlocked += OnLayerUnlocked;
+            _pile.Restored += OnPileRestored;
+            if (_save != null)
+            {
+                _save.Notice += ShowMessage;
+            }
             _pourController.Poured += OnPoured;
             if (_scoop != null)
             {
@@ -108,6 +116,11 @@ namespace Cinderbird.UI
             _pile.Dug -= OnDug;
             _pile.DigBlocked -= OnDigBlocked;
             _pile.LayerUnlocked -= OnLayerUnlocked;
+            _pile.Restored -= OnPileRestored;
+            if (_save != null)
+            {
+                _save.Notice -= ShowMessage;
+            }
             _pourController.Poured -= OnPoured;
             if (_scoop != null)
             {
@@ -155,6 +168,12 @@ namespace Cinderbird.UI
         private void OnDug(DigResult result, Vector3 center, float radius)
         {
             // Read on dig only: it changes only then.
+            _pileVolume = _pile.TotalAshVolume;
+            _dirty = true;
+        }
+
+        private void OnPileRestored()
+        {
             _pileVolume = _pile.TotalAshVolume;
             _dirty = true;
         }

@@ -51,5 +51,16 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(look.Yaw, Is.EqualTo(5f).Within(1e-4f));
         }
+
+        [Test]
+        public void Set_JumpsToTheDirection_WithPitchClamped()
+        {
+            LookRotation look = new LookRotation(MaxPitch);
+
+            look.Set(370f, -120f);
+
+            Assert.That(look.Yaw, Is.EqualTo(10f).Within(1e-4f));
+            Assert.That(look.Pitch, Is.EqualTo(-MaxPitch));
+        }
     }
 }

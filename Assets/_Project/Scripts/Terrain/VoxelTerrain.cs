@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 using Cinderbird.Embers;
 using Unity.Collections;
 using Unity.Jobs;
@@ -59,6 +60,15 @@ namespace Cinderbird.Terrain
         /// <summary>Fired when a layer opens for digging (the layer index).</summary>
         public event Action<int> LayerUnlocked;
 
+        /// <summary>Fired after saved terrain data was applied and re-meshed; totals may have changed.</summary>
+        public event Action Restored;
+
+        /// <summary>
+        /// Everything that decides how the fresh mountain is generated. A save only stores changed chunks, so it
+        /// can only be applied to a mountain with the same fingerprint.
+        /// </summary>
+        public string Fingerprint { get; private set; }
+
         /// <summary>The deepest ash layer that can be dug right now.</summary>
         public int DeepestUnlockedLayer => _terrain?.Locks.DeepestUnlocked ?? 0;
 
@@ -96,6 +106,7 @@ namespace Cinderbird.Terrain
             _terrain = new AshTerrain(world, layerCount);
             _terrain.Generate(_settings.PileShape, _layerCatalog != null ? _layerCatalog.CreateLayout() : null);
             SpawnEmbers();
+            Fingerprint = BuildFingerprint();
             _mesher = new MarchingCubes();
             if (_layerCatalog != null)
             {
@@ -161,6 +172,18 @@ namespace Cinderbird.Terrain
 
         public int LayerCount => _terrain?.Locks.Count ?? 1;
 
+        /// <summary>Re-meshes the chunks a save restored and tells listeners the totals changed.</summary>
+        public void CommitRestore()
+        {
+            if (_terrain == null)
+            {
+                return;
+            }
+
+            RebuildDirtyChunks();
+            Restored?.Invoke();
+        }
+
         /// <summary>The ash and dust colors of a dug load, blended by how much came from each layer.</summary>
         public void MixLayerColors(float[] removedByLayer, out Color ashColor, out Color dustColor)
         {
@@ -205,6 +228,31 @@ namespace Cinderbird.Terrain
             List<float> weights = new List<float>();
             _tierCatalog.CopySpawnWeights(weights);
             _terrain.SpawnEmbers(_emberSpawnSettings.ToParameters(), weights);
+        }
+
+        // Invariant culture: the same mountain must give the same text on every PC, whatever its number format.
+        private string BuildFingerprint()
+        {
+            AshPileShape shape = _settings.PileShape;
+            StringBuilder builder = new StringBuilder();
+            builder.Append(FormattableString.Invariant(
+                $"world {_settings.ChunkCells} {_settings.ChunksX}x{_settings.ChunksY}x{_settings.ChunksZ} {_settings.CellSize:R}; "));
+            builder.Append(FormattableString.Invariant(
+                $"pile {shape.Radius:R} {shape.Height:R} {shape.NoiseAmplitude:R} {shape.NoiseScale:R} {shape.NoiseSeed}"));
+            if (_layerCatalog != null)
+            {
+                builder.Append("; layers");
+                for (int i = 0; i < _layerCatalog.Count; i++)
+                {
+                    float start = _layerCatalog[i] != null ? _layerCatalog[i].StartDepth : 0f;
+                    builder.Append(FormattableString.Invariant($" {start:R}"));
+                }
+
+                Vector3 pocket = _layerCatalog.PocketCenter;
+                builder.Append(FormattableString.Invariant($"; pocket {pocket.y:R} {_layerCatalog.PocketRadius:R}"));
+            }
+
+            return builder.ToString();
         }
 
         private void CreateViews()

@@ -105,6 +105,28 @@ namespace Cinderbird.Sifting
             return taken;
         }
 
+        /// <summary>Replaces everything with a saved state. The ember capacity isn't saved; it comes from the settings.</summary>
+        /// <param name="loadVolume">Size of the load being shaken; raised to <paramref name="ashVolume"/> if smaller.</param>
+        public void Restore(float ashVolume, float loadVolume, Color ashColor, Color dustColor, IReadOnlyList<Ember> embers)
+        {
+            if (ashVolume < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ashVolume), "Ash volume cannot be negative.");
+            }
+
+            AshVolume = ashVolume;
+            LoadVolume = Math.Max(loadVolume, ashVolume);
+            AshColor = ashColor;
+            DustColor = dustColor;
+            _embers.Clear();
+            for (int i = 0; i < embers.Count; i++)
+            {
+                _embers.Add(embers[i]);
+            }
+
+            Changed?.Invoke();
+        }
+
         /// <returns>The ash actually removed, which is less than asked if the sieve runs out.</returns>
         public float RemoveAsh(float volume)
         {

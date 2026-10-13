@@ -44,6 +44,16 @@ namespace Cinderbird.Terrain
             return layer < 0 || layer >= _unlocked.Length || _unlocked[layer];
         }
 
+        /// <summary>Opens every layer down to and including <paramref name="layer"/> (clamped), e.g. when loading a save.</summary>
+        public void UnlockThrough(int layer)
+        {
+            int last = Math.Min(layer, _unlocked.Length - 1);
+            for (int i = 0; i <= last; i++)
+            {
+                _unlocked[i] = true;
+            }
+        }
+
         /// <returns>The layer that was opened, or -1 if every layer is already open.</returns>
         public int UnlockNext()
         {

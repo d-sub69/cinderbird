@@ -48,7 +48,7 @@ Assets/
       Nest/            nest, feeding, heat
       Economy/         currencies, costs (later)
       UI/              HUD and menus
-      Save/            persistence (later)
+      Save/            persistence: save file, autosave, terrain snapshots
     Data/              ScriptableObject assets (ember tiers, upgrade definitions, balance values)
     Prefabs/
     Materials/

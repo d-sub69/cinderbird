@@ -51,5 +51,31 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(changes, Is.EqualTo(1));
         }
+
+        [Test]
+        public void Restore_SetsBoth_AndFiresChangedAndRestored()
+        {
+            Currencies currencies = new Currencies();
+            currencies.Add(5, 3);
+            int changes = 0;
+            int restores = 0;
+            currencies.Changed += () => changes++;
+            currencies.Restored += () => restores++;
+
+            currencies.Restore(120, 40);
+
+            Assert.That(currencies.Glow, Is.EqualTo(120));
+            Assert.That(currencies.Heat, Is.EqualTo(40));
+            Assert.That(changes, Is.EqualTo(1));
+            Assert.That(restores, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Restore_Negative_Throws()
+        {
+            Currencies currencies = new Currencies();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => currencies.Restore(-1, 0));
+        }
     }
 }

@@ -24,6 +24,7 @@ namespace Cinderbird.Sifting
 
         public bool IsFilling => _transfer.IsActive;
         public float IncomingVolume => _transfer.Volume;
+        public IReadOnlyList<Ember> IncomingEmbers => _transfer.Embers;
         public float IncomingProgress => _transfer.Progress;
         public Color IncomingAshColor => _transfer.AshColor;
         public Color IncomingDustColor => _transfer.DustColor;
