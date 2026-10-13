@@ -58,6 +58,8 @@ namespace Cinderbird.Embers
             if (_visuals != null)
             {
                 _terrain.Dug += OnDug;
+                _terrain.DigStarted += OnDug;
+                _terrain.SettleFinished += OnSettled;
                 _terrain.Built += OnTerrainBuilt;
                 _terrain.Restored += OnTerrainBuilt;
                 if (_terrain.IsBuilt)
@@ -72,6 +74,8 @@ namespace Cinderbird.Embers
             if (_visuals != null)
             {
                 _terrain.Dug -= OnDug;
+                _terrain.DigStarted -= OnDug;
+                _terrain.SettleFinished -= OnSettled;
                 _terrain.Built -= OnTerrainBuilt;
                 _terrain.Restored -= OnTerrainBuilt;
             }
@@ -123,14 +127,26 @@ namespace Cinderbird.Embers
 
         private void OnDug(DigResult result, Vector3 center, float radius)
         {
+            RefreshAround(center, radius);
+        }
+
+        // A slide changed a box of the surface; everything within reach of it may glimmer differently now. Done once
+        // per slide, not every settling update: re-probing a wide area a dozen times a second cost milliseconds.
+        private void OnSettled(Bounds changed)
+        {
+            RefreshAround(changed.center, changed.extents.magnitude);
+        }
+
+        private void RefreshAround(Vector3 center, float radius)
+        {
             if (_chunkCandidates == null)
             {
                 return;
             }
 
-            // An ember's glimmer comes from probing up to MaxDepth around it, and the dig changed samples only within
-            // its radius (plus one cell of blending). Embers farther away than both can't have changed, so only the
-            // ones within reach are probed again; probing every ember of the surrounding chunks took milliseconds.
+            // An ember's glimmer comes from probing up to MaxDepth around it, and the change touched samples only
+            // within its radius (plus one cell of blending). Embers farther away than both can't have changed, so
+            // only the ones within reach are probed again; probing every ember of the surrounding chunks took ms.
             AshTerrain terrain = _terrain.Terrain;
             float reach = radius + _settings.MaxDepth + terrain.World.CellSize;
             Vector3 extent = Vector3.one * reach;

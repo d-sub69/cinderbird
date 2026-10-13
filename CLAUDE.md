@@ -29,7 +29,7 @@ embers, ash pour) are done and playtested. Phase 1 builds what everything else d
 - 1D. Save system: changed chunks (quantized + gzip), embers, tools, currencies, player; versioned JSON
   via JsonUtility, atomic writes, autosave
 - 1E. Game shell: pause/options menu, single `GameBootstrap`, `Main.unity`, performance budget pass
-- Right after Phase 1: ash settling physics
+- Right after Phase 1: ash settling physics (done: S1 solver, S2 in game)
 
 Packages approved for 1B: Mathematics (new), Burst and Collections (already present indirectly; pin them).
 **Still out of scope:** shop, upgrades, helpers, powers, valley, audio polish, real models.
@@ -103,6 +103,9 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - Embers are **data points stored per chunk** (position + tier). Embers inside the removed volume move
   into the sieve's contents. Embers are not GameObjects until they are shown in the sieve or basket.
 - Marching cubes produces the mesh; collider updated for touched chunks.
+- Settling (`AshSettler` / `AshSettling`): loose ash around a dig slides to the repose angle (50°, the generated
+  mountain's own slopes count as stable), overhangs collapse, locked layers act as rock, mass is conserved exactly.
+  A scoop drains out of the pile over the pour time while the walls sink in, as one simulation on a worker thread.
 
 ## How to work with me (Art)
 - I am an experienced developer (C#-like X++ background) but new to Unity. Explain Unity-specific concepts

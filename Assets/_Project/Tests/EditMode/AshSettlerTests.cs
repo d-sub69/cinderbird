@@ -366,5 +366,150 @@ namespace Cinderbird.Tests.EditMode
             Assert.Throws<ArgumentOutOfRangeException>(() => new SettleParameters(0f, 3f, 0.5f));
             Assert.Throws<ArgumentOutOfRangeException>(() => new SettleParameters(90f, 3f, 0.5f));
         }
+
+        [Test]
+        public void Commit_ReportsWhereAshRan_ForDust()
+        {
+            AshTerrain terrain = CreateMountain();
+            terrain.Locks.UnlockThrough(1);
+            Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+            DigPit(terrain, top, 0.6f, 6);
+            AshSettler settler = new AshSettler(Parameters);
+            settler.Begin(terrain, top, 0.6f);
+
+            settler.Step(40);
+            settler.Commit();
+
+            Assert.That(settler.LastCommitChangedAnything, Is.True);
+            Assert.That(settler.LastSlidePoints.Count, Is.GreaterThan(0));
+            Assert.That(settler.LastSlideLayers.Count, Is.EqualTo(settler.LastSlidePoints.Count));
+            foreach (Vector3 point in settler.LastSlidePoints)
+            {
+                Assert.That((point - top).magnitude, Is.LessThan(0.6f + Parameters.Reach + 1f), "Dust far from the dig");
+            }
+
+            Bounds changed = settler.LastCommitBounds;
+            Assert.That(changed.size.x, Is.GreaterThan(0f));
+            settler.End();
+        }
+
+        [Test]
+        public void Settling_InSeveralUpdates_EndsLikeSettlingAtOnce()
+        {
+            AshTerrain stepwise = CreateMountain();
+            AshTerrain atOnce = CreateMountain();
+            Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+            foreach (AshTerrain terrain in new[] { stepwise, atOnce })
+            {
+                terrain.Locks.UnlockThrough(1);
+                DigPit(terrain, top, 0.6f, 6);
+            }
+
+            AshSettler settler = new AshSettler(Parameters);
+            settler.Begin(stepwise, top, 0.6f);
+            int updates = 0;
+            while (settler.Step(30) && updates < 100)
+            {
+                settler.Commit();
+                updates++;
+            }
+
+            settler.Commit();
+            settler.End();
+            Settle(atOnce, top, 0.6f);
+
+            Assert.That(updates, Is.GreaterThan(1), "A deep pit should take several updates");
+            Assert.That(MaxChange(stepwise.World, CopyDensities(atOnce.World)), Is.LessThan(1e-4f));
+            Assert.That(stepwise.BuriedEmberCount, Is.EqualTo(atOnce.BuriedEmberCount));
+        }
+
+        // A scoop center a quarter meter under the generated surface at x/z.
+        private static Vector3 UnderSurface(AshTerrain terrain, float x, float z)
+        {
+            VoxelWorld world = terrain.World;
+            Vector2Int column = ColumnOf(world, new Vector3(x, 0f, z));
+            float surface = world.Origin.y + terrain.NaturalSurfaceSample(column.x, column.y) * world.CellSize;
+            return new Vector3(x, surface - 0.25f, z);
+        }
+
+        [Test]
+        public void Scoop_DrainedWhileSettling_TakesExactlyWhatWasCounted()
+        {
+            AshTerrain terrain = CreateMountain();
+            terrain.Locks.UnlockThrough(1);
+            Vector3 center = UnderSurface(terrain, 3f, 0.3f);
+            float before = terrain.World.TotalAshVolume();
+            int embersBefore = terrain.BuriedEmberCount;
+            List<Ember> taken = new List<Ember>();
+            DigResult counted = terrain.StartDig(center, 0.5f, taken, null, 0.25f);
+            Assert.That(counted.RemovedVolume, Is.GreaterThan(0.1f), "Setup: the scoop should take ash");
+
+            AshSettler settler = new AshSettler(new SettleParameters(50f, 2f, 0.5f, 0.1f));
+            settler.BeginScoop(terrain, center, 0.5f);
+            Assert.That(settler.IsDraining, Is.True);
+            for (int update = 1; update <= 400; update++)
+            {
+                settler.Drain(update / 9f);
+                bool moving = settler.Step(4);
+                settler.Commit();
+                if (!moving && !settler.IsDraining)
+                {
+                    break;
+                }
+            }
+
+            settler.End();
+            Assert.That(terrain.World.TotalAshVolume(), Is.EqualTo(before - counted.RemovedVolume).Within(0.002f));
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(embersBefore - taken.Count));
+            List<Ember> embers = new List<Ember>();
+            terrain.CopyAllEmbers(embers);
+            foreach (Ember ember in embers)
+            {
+                Assert.That(terrain.World.SampleDensity(ember.Position), Is.GreaterThan(0f), $"Ember at {ember.Position} is in the open");
+            }
+        }
+
+        [Test]
+        public void Drain_HalfwayTakesAboutHalf()
+        {
+            AshTerrain terrain = CreateMountain();
+            Vector3 center = UnderSurface(terrain, 0.2f, 0.1f);
+            float before = terrain.World.TotalAshVolume();
+            DigResult counted = terrain.StartDig(center, 0.5f, new List<Ember>(), null, 0f);
+            AshSettler settler = new AshSettler(Parameters);
+            settler.BeginScoop(terrain, center, 0.5f);
+
+            settler.Drain(0.5f);
+            settler.Commit();
+
+            Assert.That(before - terrain.World.TotalAshVolume(), Is.EqualTo(counted.RemovedVolume * 0.5f).Within(counted.RemovedVolume * 0.02f));
+            Assert.That(settler.IsDraining, Is.True);
+            settler.Finish();
+            Assert.That(before - terrain.World.TotalAshVolume(), Is.EqualTo(counted.RemovedVolume).Within(0.002f));
+        }
+
+        [Test]
+        public void FlowCap_SpreadsTheSlideOverMoreSteps()
+        {
+            int Steps(float cap)
+            {
+                AshTerrain terrain = CreateMountain();
+                terrain.Locks.UnlockThrough(1);
+                Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+                DigPit(terrain, top, 0.6f, 6);
+                AshSettler settler = new AshSettler(new SettleParameters(35f, 3f, 0.5f, cap));
+                settler.Begin(terrain, top, 0.6f);
+                int steps = 0;
+                while (settler.Step(1) && steps < 5000)
+                {
+                    steps++;
+                }
+
+                settler.End();
+                return steps;
+            }
+
+            Assert.That(Steps(0.05f), Is.GreaterThan(Steps(0f)));
+        }
     }
 }

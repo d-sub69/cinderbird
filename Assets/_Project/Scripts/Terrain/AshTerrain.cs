@@ -19,7 +19,8 @@ namespace Cinderbird.Terrain
         // Chunks whose embers changed since generation; a dig can take embers without changing any sample.
         private readonly bool[] _embersChanged;
         private readonly int[] _emberVersions;
-        private AshPileShape? _shape;
+        // Generated surface height per sample column, in samples (x + z * SamplesX).
+        private float[] _naturalSurface;
         private readonly List<int> _chunkScratch = new List<int>();
 
         public AshTerrain(VoxelWorld world, int layerCount = 1)
@@ -54,7 +55,7 @@ namespace Cinderbird.Terrain
         public void Generate(AshPileShape shape, LayerLayout layout = null)
         {
             AshPileGenerator.Generate(World, shape, layout);
-            _shape = shape;
+            StoreNaturalSurface(shape);
             TotalAshVolume = World.TotalAshVolume();
             World.MarkAllDirty();
             ClearModified();
@@ -65,16 +66,24 @@ namespace Cinderbird.Terrain
         /// <see cref="VoxelWorld"/> sample indices); NaN before <see cref="Generate"/>. Settling uses it so the
         /// mountain's own slopes count as stable even where they're steeper than loose ash would rest.
         /// </summary>
+        /// <remarks>Read from a table filled at generation, so settling can call it from a background thread.</remarks>
         public float NaturalSurfaceSample(int x, int z)
         {
-            if (!_shape.HasValue)
-            {
-                return float.NaN;
-            }
+            return _naturalSurface != null ? _naturalSurface[x + z * World.SamplesX] : float.NaN;
+        }
 
-            Vector3 column = World.SamplePosition(x, 0, z);
-            float height = AshPileGenerator.SurfaceHeightAt(column.x, column.z, _shape.Value);
-            return (height - World.Origin.y) / World.CellSize;
+        private void StoreNaturalSurface(AshPileShape shape)
+        {
+            _naturalSurface ??= new float[World.SamplesX * World.SamplesZ];
+            for (int z = 0; z < World.SamplesZ; z++)
+            {
+                for (int x = 0; x < World.SamplesX; x++)
+                {
+                    Vector3 column = World.SamplePosition(x, 0, z);
+                    float height = AshPileGenerator.SurfaceHeightAt(column.x, column.z, shape);
+                    _naturalSurface[x + z * World.SamplesX] = (height - World.Origin.y) / World.CellSize;
+                }
+            }
         }
 
         /// <summary>Moves a buried ember to a new spot (e.g. carried by sliding ash), across chunks if needed.</summary>
@@ -185,17 +194,34 @@ namespace Cinderbird.Terrain
         /// <param name="center">World-local position (the terrain object's local space).</param>
         /// <param name="extractedEmbers">Embers inside the sphere are appended here.</param>
         /// <param name="removedByLayer">If given, cubic meters taken from each layer are added to it.</param>
-        public DigResult Dig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null)
+        /// <param name="emberCatchMargin">Embers this far beyond the dug sphere are caught too (meters).</param>
+        public DigResult Dig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null,
+            float emberCatchMargin = 0f)
         {
-            DigResult carve = SphereDigBrush.Dig(World, center, radius, Locks, removedByLayer);
+            DigResult result = StartDig(center, radius, extractedEmbers, removedByLayer, emberCatchMargin);
+            CarveDig(center, radius);
+            return result;
+        }
 
-            Vector3 extent = Vector3.one * radius;
+        /// <summary>
+        /// First half of a dig that is carved over a moment: takes the embers and counts the ash exactly as
+        /// <see cref="Dig"/> would, but carves nothing. Follow with <see cref="CarveDig"/> calls of growing radius,
+        /// ending with the full one, and change nothing else in between.
+        /// </summary>
+        public DigResult StartDig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer,
+            float emberCatchMargin)
+        {
+            DigResult measured = SphereDigBrush.Measure(World, center, radius, Locks, removedByLayer);
+
+            // The sieve catches embers a little beyond the ash it takes, so one scoop on a glimmer gets its ember.
+            float catchRadius = radius + Mathf.Max(0f, emberCatchMargin);
+            Vector3 extent = Vector3.one * catchRadius;
             World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
             int emberCount = 0;
             for (int i = 0; i < _chunkScratch.Count; i++)
             {
                 int chunk = _chunkScratch[i];
-                int extracted = _embers[chunk].ExtractWithin(center, radius, extractedEmbers, Locks);
+                int extracted = _embers[chunk].ExtractWithin(center, catchRadius, extractedEmbers, Locks);
                 if (extracted > 0)
                 {
                     _embersChanged[chunk] = true;
@@ -204,9 +230,18 @@ namespace Cinderbird.Terrain
                 }
             }
 
-            TotalAshVolume -= carve.RemovedVolume;
+            TotalAshVolume -= measured.RemovedVolume;
             BuriedEmberCount -= emberCount;
-            return new DigResult(carve.RemovedVolume, emberCount, carve.BlockedLayer);
+            return new DigResult(measured.RemovedVolume, emberCount, measured.BlockedLayer);
+        }
+
+        /// <summary>
+        /// Carves (part of) a dig begun with <see cref="StartDig"/>. Carving is a CSG subtract, so growing radii
+        /// end exactly where one carve of the full radius would; the ash was already counted at the start.
+        /// </summary>
+        public void CarveDig(Vector3 center, float radius)
+        {
+            SphereDigBrush.Dig(World, center, radius, Locks, null);
         }
 
         public void CopyAllEmbers(List<Ember> output)

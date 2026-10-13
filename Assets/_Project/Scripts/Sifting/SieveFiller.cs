@@ -25,6 +25,9 @@ namespace Cinderbird.Sifting
         public bool IsFilling => _transfer.IsActive;
         public float IncomingVolume => _transfer.Volume;
         public IReadOnlyList<Ember> IncomingEmbers => _transfer.Embers;
+
+        /// <summary>Seconds a scooped load takes to pour in; the hole in the pile opens over the same time.</summary>
+        public float PourDuration => _settings != null ? _settings.FillDuration : 0f;
         public float IncomingProgress => _transfer.Progress;
         public Color IncomingAshColor => _transfer.AshColor;
         public Color IncomingDustColor => _transfer.DustColor;

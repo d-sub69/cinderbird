@@ -121,7 +121,11 @@ namespace Cinderbird.Player
 
             _extractedEmbers.Clear();
             float[] removedByLayer = LayerBuffer(_targetTerrain.LayerCount);
-            DigResult result = _targetTerrain.Dig(_targetCenter, _settings.Radius, _extractedEmbers, removedByLayer);
+            // The hole opens while the ash pours into the sieve, so the pile empties as the sieve fills.
+            bool pours = _filler != null && _filler.isActiveAndEnabled;
+            float carveSeconds = pours ? _filler.PourDuration : 0f;
+            DigResult result = _targetTerrain.Dig(_targetCenter, _settings.Radius, _extractedEmbers, removedByLayer,
+                _settings.EmberCatchMargin, carveSeconds);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
                 return;
@@ -130,7 +134,7 @@ namespace Cinderbird.Player
             _targetTerrain.MixLayerColors(removedByLayer, out Color ashColor, out Color dustColor);
 
             // The filler copies the embers, so the list can be reused for the next dig.
-            if (_filler != null && _filler.isActiveAndEnabled)
+            if (pours)
             {
                 _filler.TryBegin(result.RemovedVolume, _extractedEmbers, _targetSurfacePoint, ashColor, dustColor);
                 return;

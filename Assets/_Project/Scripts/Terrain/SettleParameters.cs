@@ -6,7 +6,8 @@ namespace Cinderbird.Terrain
     /// <summary>How loose ash settles after a dig, as plain data so <see cref="AshSettler"/> can be tested.</summary>
     public readonly struct SettleParameters
     {
-        public SettleParameters(float reposeAngleDegrees, float reach, float flowRate)
+        /// <param name="maxFlowPerStep">Most ash (in samples' worth) a column may shed per step; 0 = no limit.</param>
+        public SettleParameters(float reposeAngleDegrees, float reach, float flowRate, float maxFlowPerStep = 0f)
         {
             if (reposeAngleDegrees <= 0f || reposeAngleDegrees >= 90f)
             {
@@ -16,6 +17,7 @@ namespace Cinderbird.Terrain
             ReposeAngleDegrees = reposeAngleDegrees;
             Reach = Mathf.Max(0f, reach);
             FlowRate = Mathf.Clamp(flowRate, 0.05f, 1f);
+            MaxFlowPerStep = maxFlowPerStep > 0f ? maxFlowPerStep : float.MaxValue;
         }
 
         /// <summary>The steepest slope loose ash rests at (about 35° for dry ash).</summary>
@@ -26,6 +28,12 @@ namespace Cinderbird.Terrain
 
         /// <summary>Share of the excess a column sheds per step (0..1): lower is smoother but takes more steps.</summary>
         public float FlowRate { get; }
+
+        /// <summary>
+        /// Most ash a column sheds in one step. Without a cap, a steep wall sheds most of its excess in the first
+        /// steps and the slide looks like a snap; capped, ash runs at a steady pace like a real trickle.
+        /// </summary>
+        public float MaxFlowPerStep { get; }
 
         /// <summary>Highest stable height difference between neighbors one cell apart, in cells.</summary>
         public float MaxRisePerCell => Mathf.Tan(ReposeAngleDegrees * Mathf.Deg2Rad);

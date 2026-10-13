@@ -22,6 +22,20 @@ namespace Cinderbird.Terrain
         /// <param name="removedByLayer">If given, cubic meters removed from each layer are added to it (index = layer).</param>
         public static DigResult Dig(IDensityField field, Vector3 center, float radius, LayerLocks locks, float[] removedByLayer)
         {
+            return Carve(field, center, radius, locks, removedByLayer, true);
+        }
+
+        /// <summary>
+        /// Reports exactly what <see cref="Dig(IDensityField, Vector3, float, LayerLocks, float[])"/> would remove, without
+        /// changing anything; lets a scoop know its load before the hole is carved over a moment.
+        /// </summary>
+        public static DigResult Measure(IDensityField field, Vector3 center, float radius, LayerLocks locks, float[] removedByLayer)
+        {
+            return Carve(field, center, radius, locks, removedByLayer, false);
+        }
+
+        private static DigResult Carve(IDensityField field, Vector3 center, float radius, LayerLocks locks, float[] removedByLayer, bool write)
+        {
             if (radius <= 0f)
             {
                 return default;
@@ -75,7 +89,10 @@ namespace Cinderbird.Terrain
                             removedByLayer[layer] += removed * field.CellVolume;
                         }
 
-                        field.SetDensity(x, y, z, carved);
+                        if (write)
+                        {
+                            field.SetDensity(x, y, z, carved);
+                        }
                     }
                 }
             }

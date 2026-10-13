@@ -50,6 +50,20 @@ namespace Cinderbird.Player
             ? default
             : new PlayerPose(transform.position, _look.Yaw, _look.Pitch, _crouch.IsCrouching);
 
+        /// <summary>Shifts the player by an offset at once (no collision), e.g. up out of ash that settled onto them.</summary>
+        public void MoveBy(Vector3 offset)
+        {
+            if (_motor == null)
+            {
+                return;
+            }
+
+            // A CharacterController overrides direct position changes while enabled.
+            _characterController.enabled = false;
+            transform.position += offset;
+            _characterController.enabled = true;
+        }
+
         /// <summary>Moves the player to a saved pose. If crouch isn't held, they stand up once there's headroom.</summary>
         public void RestorePose(PlayerPose pose)
         {

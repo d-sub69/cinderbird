@@ -18,6 +18,8 @@ namespace Cinderbird.Terrain
     /// the amount of ash is exactly what the column holds: settling never creates or destroys ash.</item>
     /// </list>
     /// Embers in sliding ash ride along and stay buried. Plain C# (no Unity objects) so it can be unit tested.
+    /// Threading: <see cref="Begin"/> and <see cref="Step"/> only read the terrain and may run on a worker thread,
+    /// as long as nothing writes the terrain meanwhile; <see cref="Commit"/> writes it and belongs on the main thread.
     /// </summary>
     public sealed class AshSettler
     {
@@ -27,6 +29,9 @@ namespace Cinderbird.Terrain
         // Embers stay at least this many cells below the surface, so they never end up in the open.
         private const float EmberMinDepth = 0.75f;
         private const int MaxStepsToRest = 4000;
+        // Samples' worth of ash a column must lose in one commit to show a dust puff there, and how many puffs at most.
+        private const float MinSlideForDust = 0.15f;
+        private const int MaxSlidePoints = 48;
 
         // The 8 neighbors: 4 sides, then 4 diagonals.
         private static readonly int[] NeighborX = { 1, -1, 0, 0, 1, 1, -1, -1 };
@@ -38,6 +43,8 @@ namespace Cinderbird.Terrain
         private readonly List<SettlingEmber> _embers = new List<SettlingEmber>();
         private readonly List<int> _chunkScratch = new List<int>();
         private readonly float[] _excess = new float[8];
+        private readonly List<Vector3> _slidePoints = new List<Vector3>();
+        private readonly List<byte> _slideLayers = new List<byte>();
 
         private AshTerrain _terrain;
         private int _x0;
@@ -50,6 +57,10 @@ namespace Cinderbird.Terrain
         private int[] _base;
         private int[] _top;
         private float[] _natural;
+        private float[] _massAtCommit;
+        // Scoop ash still to take out of each column, and how much of the scoop is out (1 = none pending).
+        private float[] _drain;
+        private float _drainApplied = 1f;
         private bool[] _active;
         private bool[] _nextActive;
         private bool[] _changed;
@@ -77,6 +88,12 @@ namespace Cinderbird.Terrain
         public Bounds LastCommitBounds { get; private set; }
 
         public bool LastCommitChangedAnything { get; private set; }
+
+        /// <summary>Local surface points where ash ran off during the last commit (for dust), at most a few dozen.</summary>
+        public IReadOnlyList<Vector3> LastSlidePoints => _slidePoints;
+
+        /// <summary>The layer of the ash at each of <see cref="LastSlidePoints"/>.</summary>
+        public IReadOnlyList<byte> LastSlideLayers => _slideLayers;
 
         /// <summary>
         /// Starts settling the area around a dig: loads every column within the dig radius plus the reach.
@@ -141,6 +158,137 @@ namespace Cinderbird.Terrain
             }
 
             TrackEmbers();
+            Array.Clear(_drain, 0, _width * _depth);
+            _drainApplied = 1f;
+        }
+
+        /// <summary>
+        /// Starts a scoop and its slide as one simulation: loads the area around a dig that has been counted
+        /// (<see cref="AshTerrain.StartDig"/>) but not carved, and records how much ash the dig sphere holds in each
+        /// column. <see cref="Drain"/> then takes that ash out over time while the slide runs, so the walls sink
+        /// into the hole as it forms. Ash comes off the top of each column: loose ash over the hole falls in.
+        /// </summary>
+        public void BeginScoop(AshTerrain terrain, Vector3 center, float radius)
+        {
+            Begin(terrain, center, radius);
+            VoxelWorld world = terrain.World;
+            float cellSize = world.CellSize;
+            Vector3 cell = (center - world.Origin) / cellSize;
+            float reachCells = radius / cellSize + 1f;
+            bool any = false;
+            for (int z = 0; z < _depth; z++)
+            {
+                for (int x = 0; x < _width; x++)
+                {
+                    float dx = _x0 + x - cell.x;
+                    float dz = _z0 + z - cell.z;
+                    if (dx * dx + dz * dz > reachCells * reachCells)
+                    {
+                        continue;
+                    }
+
+                    int i = x + z * _width;
+                    float amount = Mathf.Min(SphereAshInColumn(i, _x0 + x, _z0 + z, center, radius), _mass[i]);
+                    if (amount > MinTransfer)
+                    {
+                        _drain[i] = amount;
+                        any = true;
+                    }
+                }
+            }
+
+            _drainApplied = any ? 0f : 1f;
+        }
+
+        /// <summary>Whether a scoop's ash is still being taken out (see <see cref="BeginScoop"/>).</summary>
+        public bool IsDraining => IsActive && _drainApplied < 1f;
+
+        /// <summary>
+        /// Takes the scoop's ash out up to <paramref name="progress"/> (0..1 of the whole). Call between steps,
+        /// never while <see cref="Step"/> runs on another thread. Progress 1 takes the rest exactly.
+        /// </summary>
+        public void Drain(float progress)
+        {
+            if (!IsActive || progress <= _drainApplied)
+            {
+                return;
+            }
+
+            progress = Mathf.Min(progress, 1f);
+            float share = progress - _drainApplied;
+            float remaining = 1f - _drainApplied;
+            _drainApplied = progress;
+            for (int z = 0; z < _depth; z++)
+            {
+                for (int x = 0; x < _width; x++)
+                {
+                    int i = x + z * _width;
+                    if (_drain[i] <= 0f)
+                    {
+                        continue;
+                    }
+
+                    // Shares of what's left, so the last call takes exactly the rest despite rounding.
+                    float amount = progress >= 1f ? _drain[i] : _drain[i] * share / remaining;
+                    _drain[i] -= amount;
+                    amount = Mathf.Min(amount, _mass[i]);
+                    if (amount <= 0f)
+                    {
+                        continue;
+                    }
+
+                    PopTop(_runs[i], amount);
+                    _mass[i] -= amount;
+                    SinkEmbers(i, amount);
+                    _changed[i] = true;
+                    // Straight into this step's active set: the walls around must react right away.
+                    Activate(_active, x, z);
+                }
+            }
+        }
+
+        // The loose ash a sphere covers in one column, exactly as the dig brush counts it.
+        private float SphereAshInColumn(int i, int gx, int gz, Vector3 center, float radius)
+        {
+            VoxelWorld world = _terrain.World;
+            world.CopyColumn(gx, gz, _columnDensities, _columnLayers);
+            float cellSize = world.CellSize;
+            float amount = 0f;
+            for (int y = _base[i]; y < _samplesY - 1; y++)
+            {
+                float current = _columnDensities[y];
+                if (current <= VoxelGrid.Air)
+                {
+                    continue;
+                }
+
+                float distance = (world.SamplePosition(gx, y, gz) - center).magnitude;
+                float carved = Mathf.Clamp((distance - radius) / cellSize, VoxelGrid.Air, VoxelGrid.Ash);
+                if (carved < current)
+                {
+                    amount += VoxelGrid.Fill(current) - VoxelGrid.Fill(carved);
+                }
+            }
+
+            return amount;
+        }
+
+        // Ash taken from under an ember (the scoop hollowed out below it) lets it sink by as much.
+        private void SinkEmbers(int i, float amount)
+        {
+            List<int> columnEmbers = _columnEmbers[i];
+            float mass = _mass[i];
+            for (int e = 0; e < columnEmbers.Count; e++)
+            {
+                SettlingEmber ember = _embers[columnEmbers[e]];
+                if (ember.AshBelow <= mass)
+                {
+                    continue;
+                }
+
+                float sunk = Mathf.Min(Mathf.Max(0f, ember.AshBelow - amount), mass);
+                _embers[columnEmbers[e]] = ember.MovedTo(i, sunk);
+            }
         }
 
         /// <summary>Runs up to <paramref name="steps"/> settling steps in memory (nothing is written until <see cref="Commit"/>).</summary>
@@ -167,6 +315,8 @@ namespace Cinderbird.Terrain
         public void Commit()
         {
             LastCommitChangedAnything = false;
+            _slidePoints.Clear();
+            _slideLayers.Clear();
             if (!IsActive)
             {
                 return;
@@ -187,6 +337,7 @@ namespace Cinderbird.Terrain
                 int gz = _z0 + i / _width;
                 maxY = Math.Max(maxY, WriteColumn(i, gx, gz));
                 _changed[i] = false;
+                RecordSlide(i, gx, gz);
                 minX = Math.Min(minX, gx);
                 maxX = Math.Max(maxX, gx);
                 minZ = Math.Min(minZ, gz);
@@ -204,9 +355,27 @@ namespace Cinderbird.Terrain
             }
         }
 
-        /// <summary>Settles the area to rest at once, writes it, and ends.</summary>
+        // A column that lost a noticeable amount since the last commit is where ash is running: a spot for dust.
+        private void RecordSlide(int i, int gx, int gz)
+        {
+            float lost = _massAtCommit[i] - _mass[i];
+            _massAtCommit[i] = _mass[i];
+            if (lost < MinSlideForDust || _slidePoints.Count >= MaxSlidePoints || _runs[i].Count == 0)
+            {
+                return;
+            }
+
+            VoxelWorld world = _terrain.World;
+            Vector3 surface = world.SamplePosition(gx, 0, gz);
+            surface.y = world.Origin.y + Height(i) * world.CellSize;
+            _slidePoints.Add(surface);
+            _slideLayers.Add(_runs[i][_runs[i].Count - 1].Layer);
+        }
+
+        /// <summary>Takes out any scoop ash still pending, settles the area to rest at once, writes it, and ends.</summary>
         public void Finish()
         {
+            Drain(1f);
             Step(MaxStepsToRest);
             Commit();
             End();
@@ -236,6 +405,8 @@ namespace Cinderbird.Terrain
             _base = new int[count];
             _top = new int[count];
             _natural = new float[count];
+            _massAtCommit = new float[count];
+            _drain = new float[count];
             _active = new bool[count];
             _nextActive = new bool[count];
             _changed = new bool[count];
@@ -294,6 +465,7 @@ namespace Cinderbird.Terrain
 
             _base[i] = columnBase;
             _mass[i] = mass;
+            _massAtCommit[i] = mass;
             _top[i] = top;
             _natural[i] = _terrain.NaturalSurfaceSample(gx, gz);
         }
@@ -359,7 +531,7 @@ namespace Cinderbird.Terrain
                 }
 
                 // Shedding half the largest excess would level that pair exactly; the flow rate eases into it.
-                float outflow = Mathf.Min(_mass[i], _parameters.FlowRate * most * 0.5f);
+                float outflow = Mathf.Min(Mathf.Min(_mass[i], _parameters.FlowRate * most * 0.5f), _parameters.MaxFlowPerStep);
                 if (outflow < MinTransfer)
                 {
                     continue;

@@ -20,6 +20,8 @@ namespace Cinderbird.Core
         [Header("Moments")]
         [Tooltip("One dig including re-meshing and collider baking.")]
         [SerializeField, Min(0.1f)] private float _digMilliseconds = 4f;
+        [Tooltip("One update of settling ash on the main thread: writing the slide and re-meshing (the steps run in the background).")]
+        [SerializeField, Min(0.1f)] private float _settleMilliseconds = 4f;
         [Tooltip("The main-thread part of an autosave (copying the state); packing and writing run in the background.")]
         [SerializeField, Min(0.1f)] private float _saveCaptureMilliseconds = 2f;
         [Tooltip("From the scene starting to the player having control, including building the mountain and loading the save.")]
@@ -29,6 +31,7 @@ namespace Cinderbird.Core
         public float GpuMilliseconds => _gpuMilliseconds;
         public int GcBytesPerFrame => _gcBytesPerFrame;
         public float DigMilliseconds => _digMilliseconds;
+        public float SettleMilliseconds => _settleMilliseconds;
         public float SaveCaptureMilliseconds => _saveCaptureMilliseconds;
         public float StartupSeconds => _startupSeconds;
     }

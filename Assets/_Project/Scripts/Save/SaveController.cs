@@ -479,6 +479,8 @@ namespace Cinderbird.Save
 
         private SaveFile Capture(out TerrainSnapshot terrain)
         {
+            // A hole still opening counts as open: its ash is already in the sieve.
+            _pile.FinishCarveNow();
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             using (CaptureMarker.Auto())
             {

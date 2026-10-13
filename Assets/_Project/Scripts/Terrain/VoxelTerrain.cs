@@ -59,6 +59,19 @@ namespace Cinderbird.Terrain
         // If the bake hasn't reported done by then, wait for it, so a collider is never more than this many frames late.
         private const int MaxColliderLagFrames = 2;
 
+        // A scoop's hole opens in this many stages of equal volume while its ash pours into the sieve.
+        private const int CarveStages = 5;
+
+        private AshSettling _settling;
+        private bool _carving;
+        private DigResult _carveResult;
+        private Vector3 _carveCenter;
+        private float _carveRadius;
+        private float _carveStartTime;
+        private float _carveSeconds;
+        private int _carveStage;
+        private float _carveWorstMilliseconds;
+
         /// <summary>Fired after a dig with what it removed and the dug sphere (local center, radius).</summary>
         public event Action<DigResult, Vector3, float> Dug;
 
@@ -70,6 +83,21 @@ namespace Cinderbird.Terrain
 
         /// <summary>Fired after saved terrain data was applied and re-meshed; totals may have changed.</summary>
         public event Action Restored;
+
+        /// <summary>
+        /// Fired as a dig starts, once its embers are taken (before its hole is open), with what it takes and where.
+        /// <see cref="Dug"/> follows when the hole is complete.
+        /// </summary>
+        public event Action<DigResult, Vector3, float> DigStarted;
+
+        /// <summary>Fired right before a dig changes the terrain, so background work on it can finish first.</summary>
+        public event Action BeforeEdit;
+
+        /// <summary>Fired after settling ash changed the terrain, with the local-space box that changed.</summary>
+        public event Action<Bounds> Settled;
+
+        /// <summary>Fired once a slide has come to rest (or was cut short), with the local box it changed overall.</summary>
+        public event Action<Bounds> SettleFinished;
 
         /// <summary>
         /// Everything that decides how the fresh mountain is generated. A save only stores changed chunks, so it
@@ -108,6 +136,8 @@ namespace Cinderbird.Terrain
 
         private void Awake()
         {
+            // Optional: lets ash settle and scoops drain out smoothly; without it holes are carved in stages.
+            TryGetComponent(out _settling);
             if (_settings == null || _material == null)
             {
                 Debug.LogError($"{nameof(VoxelTerrain)} on '{name}' has unassigned references.", this);
@@ -157,18 +187,27 @@ namespace Cinderbird.Terrain
         /// Carves a sphere at a world position. Embers inside it are appended to <paramref name="extractedEmbers"/>.
         /// </summary>
         /// <param name="removedByLayer">If given (length <see cref="LayerCount"/>), cubic meters taken per layer are added to it.</param>
-        public DigResult Dig(Vector3 worldCenter, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null)
+        /// <param name="emberCatchMargin">Embers this far beyond the dug sphere are caught too (meters).</param>
+        /// <param name="carveSeconds">
+        /// Over how long the hole opens up (in growing stages), e.g. while the ash pours into the sieve. The result
+        /// (ash and embers taken) is final at once; <see cref="Dug"/> fires when the hole is complete. 0 carves at once.
+        /// </param>
+        public DigResult Dig(Vector3 worldCenter, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null,
+            float emberCatchMargin = 0f, float carveSeconds = 0f)
         {
             if (_terrain == null)
             {
                 return default;
             }
 
+            // Anything still working on the terrain (a hole still opening, a slide settling) finishes writing first.
+            FinishCarveNow();
+            BeforeEdit?.Invoke();
             using (DigMarker.Auto())
             {
                 long started = Stopwatch.GetTimestamp();
                 Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
-                DigResult result = _terrain.Dig(localCenter, radius, extractedEmbers, removedByLayer);
+                DigResult result = _terrain.StartDig(localCenter, radius, extractedEmbers, removedByLayer, emberCatchMargin);
                 if (!result.RemovedAnyAsh && result.EmberCount == 0)
                 {
                     if (result.WasBlocked)
@@ -179,12 +218,80 @@ namespace Cinderbird.Terrain
                     return result;
                 }
 
-                RebuildDirtyChunks();
-                LastDigMilliseconds = MillisecondsSince(started);
-                long listenersStarted = Stopwatch.GetTimestamp();
-                Dug?.Invoke(result, localCenter, radius);
-                LastDugListenersMilliseconds = MillisecondsSince(listenersStarted);
+                DigStarted?.Invoke(result, localCenter, radius);
+
+                // With settling, the scoop drains out while the walls sink in: one simulation, written as it runs.
+                if (carveSeconds > 0f && _settling != null && _settling.isActiveAndEnabled)
+                {
+                    LastDigMilliseconds = MillisecondsSince(started);
+                    _settling.StartScoop(result, localCenter, radius, carveSeconds);
+                    return result;
+                }
+
+                _carving = true;
+                _carveResult = result;
+                _carveCenter = localCenter;
+                _carveRadius = radius;
+                _carveStartTime = Time.time;
+                _carveSeconds = carveSeconds;
+                _carveWorstMilliseconds = 0f;
+                CarveTo(carveSeconds > 0f ? 1 : CarveStages, started);
                 return result;
+            }
+        }
+
+        /// <summary>Opens a hole that is still opening all the way at once (e.g. before saving or another dig).</summary>
+        public void FinishCarveNow()
+        {
+            if (_settling != null)
+            {
+                _settling.CompleteScoopNow();
+            }
+
+            if (_carving)
+            {
+                CarveTo(CarveStages, Stopwatch.GetTimestamp());
+            }
+        }
+
+        // Each stage takes an equal share of the volume: the radius grows with the cube root.
+        private void CarveTo(int stage, long started)
+        {
+            _carveStage = stage;
+            float radius = _carveRadius * Mathf.Pow(stage / (float)CarveStages, 1f / 3f);
+            _terrain.CarveDig(_carveCenter, radius);
+            RebuildDirtyChunks();
+            _carveWorstMilliseconds = Mathf.Max(_carveWorstMilliseconds, MillisecondsSince(started));
+            if (stage < CarveStages)
+            {
+                return;
+            }
+
+            _carving = false;
+            // The worst single frame of the carve, which is what the player could feel.
+            LastDigMilliseconds = _carveWorstMilliseconds;
+            long listenersStarted = Stopwatch.GetTimestamp();
+            Dug?.Invoke(_carveResult, _carveCenter, _carveRadius);
+            LastDugListenersMilliseconds = MillisecondsSince(listenersStarted);
+        }
+
+        private void AdvanceCarve()
+        {
+            if (!_carving)
+            {
+                return;
+            }
+
+            float progress = _carveSeconds > 0f ? (Time.time - _carveStartTime) / _carveSeconds : 1f;
+            int due = Mathf.Clamp(Mathf.CeilToInt(progress * CarveStages), 1, CarveStages);
+            if (due <= _carveStage)
+            {
+                return;
+            }
+
+            using (DigMarker.Auto())
+            {
+                CarveTo(due, Stopwatch.GetTimestamp());
             }
         }
 
@@ -204,6 +311,45 @@ namespace Cinderbird.Terrain
         public int LayerCount => _terrain?.Locks.Count ?? 1;
 
         /// <summary>Re-meshes the chunks a save restored and tells listeners the totals changed.</summary>
+        /// <summary>Re-meshes what settling ash just changed and tells listeners where.</summary>
+        /// <param name="localBounds">The changed box in this object's local space.</param>
+        public void ApplySettledEdits(Bounds localBounds)
+        {
+            if (_terrain == null)
+            {
+                return;
+            }
+
+            RebuildDirtyChunks();
+            Settled?.Invoke(localBounds);
+        }
+
+        /// <summary>Called by settling once a scoop's ash is all out of the pile: fires <see cref="Dug"/> for it.</summary>
+        public void CompleteScoop(DigResult result, Vector3 localCenter, float radius)
+        {
+            long listenersStarted = Stopwatch.GetTimestamp();
+            Dug?.Invoke(result, localCenter, radius);
+            LastDugListenersMilliseconds = MillisecondsSince(listenersStarted);
+        }
+
+        /// <summary>Tells listeners a slide is over and where it changed things in total.</summary>
+        public void FinishSettle(Bounds localBounds)
+        {
+            SettleFinished?.Invoke(localBounds);
+        }
+
+        /// <summary>Ash density (-1 air .. 1 ash) at a world position; -1 before the mountain is built.</summary>
+        public float SampleDensityAt(Vector3 worldPosition)
+        {
+            return _terrain != null ? _terrain.World.SampleDensity(transform.InverseTransformPoint(worldPosition)) : VoxelGrid.Air;
+        }
+
+        /// <summary>The dust color of an ash layer, as the sieve shows it.</summary>
+        public Color DustColorOfLayer(int layer)
+        {
+            return _dustColors != null && layer >= 0 && layer < _dustColors.Length ? _dustColors[layer] : DefaultDustColor;
+        }
+
         public void CommitRestore()
         {
             if (_terrain == null)
@@ -352,6 +498,7 @@ namespace Cinderbird.Terrain
         // is visible at once and the collider catches up on the next frame, which nobody can notice.
         private void Update()
         {
+            AdvanceCarve();
             if (_bakePending && (_bakeHandle.IsCompleted || Time.frameCount - _bakeStartFrame >= MaxColliderLagFrames))
             {
                 CompleteColliderBake();

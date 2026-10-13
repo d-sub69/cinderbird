@@ -35,6 +35,8 @@ namespace Cinderbird.UI
         [SerializeField] private SaveController _save;
         [Tooltip("Optional: shows how long start-up took.")]
         [SerializeField] private GameBootstrap _bootstrap;
+        [Tooltip("Optional: shows the main-thread time of settling ash.")]
+        [SerializeField] private AshSettling _settling;
 
         private readonly FrameStats _frames = new FrameStats(FrameWindow);
         private readonly FrameStats _mainThread = new FrameStats(FrameWindow);
@@ -62,6 +64,13 @@ namespace Cinderbird.UI
         private int _savesSinceLog;
         private float _worstSaveSinceLog;
         private float _lastSeenSave;
+        private int _lastSeenSettleUpdate;
+        private int _settleUpdatesSinceLog;
+        private float _worstSettleSinceLog;
+        private float _worstSettleWorkSinceLog;
+        private float _worstSettleCommitSinceLog;
+        private float _worstSettleMeshSinceLog;
+        private float _lastSettleMilliseconds;
         private bool _pausedOrLoading;
 
         private void Awake()
@@ -165,6 +174,9 @@ namespace Cinderbird.UI
                 .Append(" mesh_max=").AppendFixed(_worstMeshSinceLog, 1).Append("ms chunks_max=").AppendInt(_mostChunksSinceLog)
                 .Append(" after_dig_max=").AppendFixed(_worstListenersSinceLog, 1).Append("ms");
             b.Append(" | saves=").AppendInt(_savesSinceLog).Append(" save_max=").AppendFixed(_worstSaveSinceLog, 1).Append("ms");
+            b.Append(" | settles=").AppendInt(_settleUpdatesSinceLog).Append(" settle_max=").AppendFixed(_worstSettleSinceLog, 1)
+                .Append("ms (write ").AppendFixed(_worstSettleCommitSinceLog, 1).Append(" mesh ").AppendFixed(_worstSettleMeshSinceLog, 1)
+                .Append(") work_max=").AppendFixed(_worstSettleWorkSinceLog, 1).Append("ms");
             if (_bootstrap != null)
             {
                 b.Append(" | start=").AppendFixed(_bootstrap.StartupSeconds, 2).Append('s');
@@ -178,6 +190,11 @@ namespace Cinderbird.UI
             _worstListenersSinceLog = 0f;
             _savesSinceLog = 0;
             _worstSaveSinceLog = 0f;
+            _settleUpdatesSinceLog = 0;
+            _worstSettleSinceLog = 0f;
+            _worstSettleWorkSinceLog = 0f;
+            _worstSettleCommitSinceLog = 0f;
+            _worstSettleMeshSinceLog = 0f;
             _worstGcSinceLog = 0;
             _gcFramesSinceLog = 0;
             _skipGcFrames = 2;
@@ -211,6 +228,17 @@ namespace Cinderbird.UI
             {
                 _listenerTimePending = false;
                 _worstListenersSinceLog = Mathf.Max(_worstListenersSinceLog, _terrain.LastDugListenersMilliseconds);
+            }
+
+            if (_settling != null && _settling.UpdateCount != _lastSeenSettleUpdate)
+            {
+                _lastSeenSettleUpdate = _settling.UpdateCount;
+                _settleUpdatesSinceLog++;
+                _lastSettleMilliseconds = _settling.LastUpdateMilliseconds;
+                _worstSettleSinceLog = Mathf.Max(_worstSettleSinceLog, _lastSettleMilliseconds);
+                _worstSettleWorkSinceLog = Mathf.Max(_worstSettleWorkSinceLog, _settling.LastWorkMilliseconds);
+                _worstSettleCommitSinceLog = Mathf.Max(_worstSettleCommitSinceLog, _settling.LastCommitMilliseconds);
+                _worstSettleMeshSinceLog = Mathf.Max(_worstSettleMeshSinceLog, _settling.LastMeshMilliseconds);
             }
 
             // A save happened when its timing changes; the value itself is that save's main-thread time.
@@ -263,6 +291,12 @@ namespace Cinderbird.UI
             {
                 b.Append("   Save ");
                 AppendTimed(_save.LastCaptureMilliseconds, _budget != null ? _budget.SaveCaptureMilliseconds : 0f, 1).Append(" ms");
+            }
+
+            if (_settling != null)
+            {
+                b.Append("   Settle ");
+                AppendTimed(_lastSettleMilliseconds, _budget != null ? _budget.SettleMilliseconds : 0f, 1).Append(" ms");
             }
 
             if (_bootstrap != null && _bootstrap.StartupSeconds > 0f)

@@ -12,9 +12,12 @@ namespace Cinderbird.Player
         [Tooltip("How far the sphere's center goes past the surface, as a fraction of the radius. " +
                  "0 = centered on the surface (shallow), 1 = whole sphere below it (deep).")]
         [SerializeField, Range(0f, 1f)] private float _penetration = 0.5f;
+        [Tooltip("Embers up to this far beyond the carved sphere are caught too, in meters, so a scoop on a glimmer gets its ember.")]
+        [SerializeField, Min(0f)] private float _emberCatchMargin = 0.25f;
 
         public float Reach => _reach;
         public float Radius => _radius;
         public float Penetration => _penetration;
+        public float EmberCatchMargin => _emberCatchMargin;
     }
 }

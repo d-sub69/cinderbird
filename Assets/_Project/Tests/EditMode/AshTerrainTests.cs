@@ -116,5 +116,72 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(dirty, Is.EquivalentTo(new[] { terrain.World.ChunkIndex(0, 0, 0) }));
         }
+
+        [Test]
+        public void StartDig_TakesEmbersAndCountsAsh_ButCarvesNothing()
+        {
+            AshTerrain terrain = CreateTerrain();
+            AshTerrain reference = CreateTerrain();
+            Vector3 center = new Vector3(0f, 0.5f, 0f);
+            float volumeBefore = terrain.World.TotalAshVolume();
+
+            DigResult started = terrain.StartDig(center, 0.8f, new List<Ember>(), null, 0f);
+            DigResult dug = reference.Dig(center, 0.8f, new List<Ember>());
+
+            Assert.That(started.RemovedVolume, Is.EqualTo(dug.RemovedVolume).Within(1e-5f));
+            Assert.That(started.EmberCount, Is.EqualTo(dug.EmberCount));
+            Assert.That(terrain.World.TotalAshVolume(), Is.EqualTo(volumeBefore).Within(1e-4f), "Nothing carved yet");
+            Assert.That(terrain.TotalAshVolume, Is.EqualTo(reference.TotalAshVolume).Within(1e-4f), "The running total already counts it");
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(reference.BuriedEmberCount));
+        }
+
+        [Test]
+        public void CarvingInGrowingStages_EndsExactlyLikeOneDig()
+        {
+            AshTerrain staged = CreateTerrain();
+            AshTerrain once = CreateTerrain();
+            Vector3 center = new Vector3(0.3f, 0.6f, -0.2f);
+
+            staged.StartDig(center, 0.8f, new List<Ember>(), null, 0f);
+            for (int stage = 1; stage <= 5; stage++)
+            {
+                staged.CarveDig(center, 0.8f * Mathf.Pow(stage / 5f, 1f / 3f));
+            }
+
+            once.Dig(center, 0.8f, new List<Ember>());
+
+            VoxelWorld a = staged.World;
+            VoxelWorld b = once.World;
+            for (int z = 0; z < a.SamplesZ; z++)
+            {
+                for (int y = 0; y < a.SamplesY; y++)
+                {
+                    for (int x = 0; x < a.SamplesX; x++)
+                    {
+                        Assert.That(a.GetDensity(x, y, z), Is.EqualTo(b.GetDensity(x, y, z)), $"Sample ({x},{y},{z})");
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void CatchMargin_TakesEmbersJustBeyondTheHole()
+        {
+            AshTerrain terrain = CreateTerrain();
+            Vector3 center = new Vector3(0f, 0.9f, 0f);
+            // 0.2 m below the bottom of a 0.4 m sphere: missed by the carve, within a 0.25 m catch margin.
+            Ember justBelow = new Ember(center + Vector3.down * 0.6f, 1);
+            terrain.PlaceEmber(justBelow);
+            List<Ember> withoutMargin = new List<Ember>();
+            List<Ember> withMargin = new List<Ember>();
+
+            AshTerrain other = CreateTerrain();
+            other.PlaceEmber(justBelow);
+            other.Dig(center, 0.4f, withoutMargin);
+            terrain.Dig(center, 0.4f, withMargin, null, 0.25f);
+
+            Assert.That(withoutMargin.Exists(e => e.Position == justBelow.Position), Is.False);
+            Assert.That(withMargin.Exists(e => e.Position == justBelow.Position), Is.True);
+        }
     }
 }
