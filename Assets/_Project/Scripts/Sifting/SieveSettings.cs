@@ -35,6 +35,10 @@ namespace Cinderbird.Sifting
         [SerializeField, Min(0.005f)] private float _clumpSize = 0.05f;
         [Tooltip("Dust particles puffed up at the dig spot.")]
         [SerializeField, Min(0)] private int _digPuffParticles = 25;
+        [Tooltip("Share of the fill time each flying clump or ember is in the air; they leave spread over the rest.")]
+        [SerializeField, Range(0.1f, 1f)] private float _flightShare = 0.6f;
+        [Tooltip("Most embers shown flying into the sieve at once; any beyond land without a flight.")]
+        [SerializeField, Min(1)] private int _maxFlyingEmbers = 24;
 
         public float FillDuration => _fillDuration;
         public float ClumpsPerLiter => _clumpsPerLiter;
@@ -42,6 +46,8 @@ namespace Cinderbird.Sifting
         public float ClumpArcHeight => _clumpArcHeight;
         public float ClumpSize => _clumpSize;
         public int DigPuffParticles => _digPuffParticles;
+        public float FlightShare => _flightShare;
+        public int MaxFlyingEmbers => _maxFlyingEmbers;
 
         public int MaxVisibleEmbers => _maxVisibleEmbers;
         public int EmberCapacity => _emberCapacity;

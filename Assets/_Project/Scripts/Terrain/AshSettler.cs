@@ -29,8 +29,7 @@ namespace Cinderbird.Terrain
         // Embers stay at least this many cells below the surface, so they never end up in the open.
         private const float EmberMinDepth = 0.75f;
         private const int MaxStepsToRest = 4000;
-        // Samples' worth of ash a column must lose in one commit to show a dust puff there, and how many puffs at most.
-        private const float MinSlideForDust = 0.15f;
+        // Most dust spots per commit (where ash runs; see SettleParameters.MinSlideForDust).
         private const int MaxSlidePoints = 48;
 
         // The 8 neighbors: 4 sides, then 4 diagonals.
@@ -41,6 +40,7 @@ namespace Cinderbird.Terrain
         private readonly SettleParameters _parameters;
         private readonly List<LayerRun> _popped = new List<LayerRun>();
         private readonly List<SettlingEmber> _embers = new List<SettlingEmber>();
+        private readonly List<LooseEmber> _looseInput = new List<LooseEmber>();
         private readonly List<int> _chunkScratch = new List<int>();
         private readonly float[] _excess = new float[8];
         private readonly List<Vector3> _slidePoints = new List<Vector3>();
@@ -360,7 +360,7 @@ namespace Cinderbird.Terrain
         {
             float lost = _massAtCommit[i] - _mass[i];
             _massAtCommit[i] = _mass[i];
-            if (lost < MinSlideForDust || _slidePoints.Count >= MaxSlidePoints || _runs[i].Count == 0)
+            if (lost < _parameters.MinSlideForDust || _slidePoints.Count >= MaxSlidePoints || _runs[i].Count == 0)
             {
                 return;
             }
@@ -744,30 +744,58 @@ namespace Cinderbird.Terrain
                 EmberField field = _terrain.EmbersIn(chunk);
                 for (int e = 0; e < field.Count; e++)
                 {
-                    Ember ember = field[e];
-                    Vector3 sample = (ember.Position - world.Origin) / cellSize;
-                    int gx = Mathf.RoundToInt(sample.x);
-                    int gz = Mathf.RoundToInt(sample.z);
-                    int x = gx - _x0;
-                    int z = gz - _z0;
-                    if (x < 0 || z < 0 || x >= _width || z >= _depth)
-                    {
-                        continue;
-                    }
-
-                    int i = x + z * _width;
-                    if (sample.y < _base[i] - 0.5f)
-                    {
-                        // In the fixed part (on or under locked ash): it stays where it is.
-                        continue;
-                    }
-
-                    float below = Mathf.Clamp(AshBelow(i, sample.y), 0f, _mass[i]);
-                    _columnEmbers[i].Add(_embers.Count);
-                    // Packed ash puts the ember at base + below - 0.5; anything else means a gap (cave) below it.
-                    bool gapBelow = Mathf.Abs(_base[i] + below - 0.5f - sample.y) > 0.05f;
-                    _embers.Add(new SettlingEmber(ember, chunk, i, below, new Vector2(sample.x - gx, sample.z - gz), gapBelow));
+                    Track(field[e], chunk, -1, LooseEmber.UnknownRest);
                 }
+            }
+
+            // Embers lying on the ash ride it too: on top of their column, they go with the top ash that slides. One whose
+            // rest isn't measured yet (just laid, falling) is left to the loose-ember view.
+            foreach (LooseEmber loose in _looseInput)
+            {
+                if (loose.HasRest)
+                {
+                    Track(loose.Ember, -1, loose.Id, loose.Rest);
+                }
+            }
+        }
+
+        private void Track(Ember ember, int chunk, int looseId, float rest)
+        {
+            VoxelWorld world = _terrain.World;
+            Vector3 sample = (ember.Position - world.Origin) / world.CellSize;
+            int gx = Mathf.RoundToInt(sample.x);
+            int gz = Mathf.RoundToInt(sample.z);
+            int x = gx - _x0;
+            int z = gz - _z0;
+            if (x < 0 || z < 0 || x >= _width || z >= _depth)
+            {
+                return;
+            }
+
+            int i = x + z * _width;
+            if (sample.y < _base[i] - 0.5f)
+            {
+                // In the fixed part (on or under locked ash): it stays where it is.
+                return;
+            }
+
+            float below = Mathf.Clamp(AshBelow(i, sample.y), 0f, _mass[i]);
+            // Packed ash puts a buried ember at base + below - 0.5; anything else means a gap (cave) below it.
+            bool gapBelow = looseId < 0 && Mathf.Abs(_base[i] + below - 0.5f - sample.y) > 0.05f;
+            _columnEmbers[i].Add(_embers.Count);
+            _embers.Add(new SettlingEmber(ember, chunk, i, below, new Vector2(sample.x - gx, sample.z - gz), gapBelow, looseId, rest));
+        }
+
+        /// <summary>
+        /// The embers lying loose on the terrain, copied on the main thread before <see cref="Begin"/> (which may run on
+        /// a worker while the game moves loose embers), so they slide with the ash too.
+        /// </summary>
+        public void UseLooseEmbers(IReadOnlyList<LooseEmber> loose)
+        {
+            _looseInput.Clear();
+            for (int i = 0; i < loose.Count; i++)
+            {
+                _looseInput.Add(loose[i]);
             }
         }
 
@@ -783,6 +811,43 @@ namespace Cinderbird.Terrain
             return below + partOfOwn * fillAt;
         }
 
+        // A loose ember is never buried again: it sits its rest above the surface of the column it rode to, so it sinks
+        // with ash running away under it and is lifted by ash sliding in on top of it.
+        private void PlaceLooseEmber(int index, SettlingEmber tracked)
+        {
+            int i = tracked.Column;
+            if (!_changed[i] && !tracked.NeedsPlacing)
+            {
+                return;
+            }
+
+            int looseIndex = _terrain.IndexOfLoose(tracked.LooseId);
+            if (looseIndex < 0 || !_terrain.LooseEmbers[looseIndex].HasRest)
+            {
+                // Picked up meanwhile, or started falling (the loose-ember view moves it until it lands).
+                return;
+            }
+
+            if (_mass[i] <= 0f)
+            {
+                // No loose ash under it (bare floor or locked rock): nothing here moves it.
+                return;
+            }
+
+            VoxelWorld world = _terrain.World;
+            int gx = _x0 + i % _width;
+            int gz = _z0 + i / _width;
+            Vector3 position = world.Origin + new Vector3(gx + tracked.Offset.x, Height(i), gz + tracked.Offset.y) * world.CellSize;
+            position.y += tracked.Rest;
+            Ember current = _terrain.LooseEmbers[looseIndex].Ember;
+            if (!position.Equals(current.Position))
+            {
+                _terrain.MoveLoose(looseIndex, position);
+            }
+
+            _embers[index] = tracked.StoredAs(new Ember(position, current.TierIndex, current.Layer), -1);
+        }
+
         // Re-places every tracked ember whose column changed, buried at its place in the column's ash.
         private void MoveTrackedEmbers()
         {
@@ -790,6 +855,12 @@ namespace Cinderbird.Terrain
             for (int index = 0; index < _embers.Count; index++)
             {
                 SettlingEmber tracked = _embers[index];
+                if (tracked.IsLoose)
+                {
+                    PlaceLooseEmber(index, tracked);
+                    continue;
+                }
+
                 if (tracked.Chunk < 0 || !_changed[tracked.Column])
                 {
                     continue;

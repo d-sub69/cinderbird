@@ -1,22 +1,21 @@
 using System;
-using System.Diagnostics;
-using System.Threading.Tasks;
+using Cinderbird.Core;
 using Unity.Profiling;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
 namespace Cinderbird.Terrain
 {
     /// <summary>
     /// Thin adapter that runs <see cref="AshSettler"/>: steps on a worker thread and, many times a second, writes
-    /// the result into the terrain on the main thread, so ash is seen to move.
+    /// the result into the terrain on the main thread, so ash is seen to move. Driven by <see cref="VoxelTerrain"/>:
     /// <list type="bullet">
     /// <item>A scoop (<see cref="StartScoop"/>) is one simulation with its slide: the scooped ash drains out of the
     /// pile over the pour time while the surrounding ash sinks into the hole as it forms.</item>
-    /// <item>Any other dig settles afterwards.</item>
+    /// <item>Any other dig settles afterwards (<see cref="SettleAfterDig"/>).</item>
     /// </list>
-    /// A new dig first writes out what is running, scoop ash fully taken (its own settling picks the slide up), so a
-    /// late write can never overwrite a fresh hole. Freezes while the game is paused (scaled time).
+    /// A new dig first writes out what is running (<see cref="WriteOutNow"/>), scoop ash fully taken (its own
+    /// settling picks the slide up), so a late write can never overwrite a fresh hole. Freezes while the game is
+    /// paused (scaled time).
     /// </summary>
     [RequireComponent(typeof(VoxelTerrain))]
     public sealed class AshSettling : MonoBehaviour
@@ -29,7 +28,8 @@ namespace Cinderbird.Terrain
 
         private VoxelTerrain _terrain;
         private AshSettler _settler;
-        private Task<bool> _work;
+        private WorkerThread _worker;
+        private bool _working;
         private float _nextUpdateTime;
 
         // A plain dig waiting to be settled from the next Update.
@@ -42,14 +42,13 @@ namespace Cinderbird.Terrain
         private DigResult _scoopResult;
         private float _scoopStartTime;
         private float _scoopSeconds;
-        private bool _firingScoopDug;
 
         // Everything the current slide changed so far, for one glimmer refresh when it ends.
         private Bounds _slideBounds;
         private bool _hasSlideBounds;
 
-        // What the next batch of work does; set on the main thread before it starts. Task.Run is a memory barrier.
-        private Func<bool> _workMethod;
+        // What the next batch of work does; set on the main thread before it starts (starting the worker is a
+        // memory barrier).
         private AshTerrain _workTerrain;
         private bool _workBegins;
         private bool _workBeginsScoop;
@@ -86,37 +85,23 @@ namespace Cinderbird.Terrain
             }
 
             _settler = new AshSettler(_settings.ToParameters());
-            // Created once: a new delegate per batch would be garbage many times a second.
-            _workMethod = DoWork;
-        }
-
-        private void OnEnable()
-        {
-            if (_settler == null)
-            {
-                return;
-            }
-
-            _terrain.Dug += OnDug;
-            _terrain.BeforeEdit += WriteOutNow;
+            _worker = new WorkerThread("Cinderbird ash settling", DoWork);
         }
 
         private void OnDisable()
         {
-            if (_settler == null)
-            {
-                return;
-            }
-
-            _terrain.Dug -= OnDug;
-            _terrain.BeforeEdit -= WriteOutNow;
             WriteOutNow();
+        }
+
+        private void OnDestroy()
+        {
+            _worker?.Dispose();
         }
 
         /// <summary>
         /// Takes a counted but uncarved dig (<see cref="AshTerrain.StartDig"/>) out of the pile over
-        /// <paramref name="seconds"/>, with the slide running at the same time. When the ash is all out, the
-        /// terrain's Dug event fires with <paramref name="result"/>.
+        /// <paramref name="seconds"/>, with the slide running at the same time. When the ash is all out,
+        /// <see cref="VoxelTerrain.CompleteScoop"/> is called with <paramref name="result"/>.
         /// </summary>
         public void StartScoop(DigResult result, Vector3 localCenter, float radius, float seconds)
         {
@@ -128,10 +113,20 @@ namespace Cinderbird.Terrain
             _pendingCenter = localCenter;
             _pendingRadius = radius;
             // Loading the area runs off the main thread; draining starts with the first update.
-            _workTerrain = _terrain.Terrain;
-            _workBegins = true;
-            _workBeginsScoop = true;
-            StartWork();
+            BeginLoad(true);
+        }
+
+        /// <summary>Settles the walls of a hole carved at once, from the next Update.</summary>
+        public void SettleAfterDig(Vector3 localCenter, float radius)
+        {
+            if (_settler == null)
+            {
+                return;
+            }
+
+            _beginPending = true;
+            _pendingCenter = localCenter;
+            _pendingRadius = radius;
         }
 
         /// <summary>
@@ -145,7 +140,7 @@ namespace Cinderbird.Terrain
                 return;
             }
 
-            if (_work != null)
+            if (_working)
             {
                 FinishWork();
             }
@@ -172,7 +167,7 @@ namespace Cinderbird.Terrain
         {
             // A plain dig that hasn't started settling: with nothing loaded there's nothing to write.
             _beginPending = false;
-            if (_work != null)
+            if (_working)
             {
                 FinishWork();
             }
@@ -189,37 +184,20 @@ namespace Cinderbird.Terrain
             EndSlide();
         }
 
-        // Digs that weren't scoops settle afterwards, from the next Update.
-        private void OnDug(DigResult result, Vector3 localCenter, float radius)
-        {
-            if (_firingScoopDug || !result.RemovedAnyAsh)
-            {
-                return;
-            }
-
-            _beginPending = true;
-            _pendingCenter = localCenter;
-            _pendingRadius = radius;
-        }
-
         private void Update()
         {
             if (_beginPending)
             {
                 _beginPending = false;
-                if (_terrain.Terrain == null)
+                if (_terrain.Terrain != null)
                 {
-                    return;
+                    BeginLoad(false);
                 }
 
-                _workTerrain = _terrain.Terrain;
-                _workBegins = true;
-                _workBeginsScoop = false;
-                StartWork();
                 return;
             }
 
-            if (_work == null || !_work.IsCompleted || Time.time < _nextUpdateTime)
+            if (!_working || !_worker.IsCompleted || Time.time < _nextUpdateTime)
             {
                 return;
             }
@@ -238,7 +216,7 @@ namespace Cinderbird.Terrain
             }
 
             // Ash just taken out needs more steps even if the last batch found everything at rest.
-            if (!moving && !draining)
+            if (!_settler.IsActive || !moving && !draining)
             {
                 EndSlide();
                 return;
@@ -247,17 +225,33 @@ namespace Cinderbird.Terrain
             StartWork();
         }
 
+        private void BeginLoad(bool scoop)
+        {
+            if (_working)
+            {
+                FinishWork();
+            }
+
+            _workTerrain = _terrain.Terrain;
+            _workBegins = true;
+            _workBeginsScoop = scoop;
+            // Copied here, on the main thread: loose embers can move while the area loads on the worker.
+            _settler.UseLooseEmbers(_workTerrain.LooseEmbers);
+            StartWork();
+        }
+
         private void StartWork()
         {
             _workSteps = _settings.StepsPerUpdate;
-            _work = Task.Run(_workMethod);
+            _working = true;
+            _worker.Start();
             _nextUpdateTime = Time.time + 1f / _settings.UpdatesPerSecond;
         }
 
-        // Runs on a worker thread.
+        // Runs on the worker thread.
         private bool DoWork()
         {
-            long started = Stopwatch.GetTimestamp();
+            long started = TimeMeasure.Now();
             if (_workBegins)
             {
                 _workBegins = false;
@@ -273,26 +267,30 @@ namespace Cinderbird.Terrain
 
             bool moving = _settler.Step(_workSteps);
             // Timed here: the result is only collected at the next update.
-            _workMilliseconds = MillisecondsSince(started);
+            _workMilliseconds = TimeMeasure.MillisecondsSince(started);
             return moving;
         }
 
         private bool FinishWork()
         {
-            Task<bool> work = _work;
-            _work = null;
-            try
+            _working = false;
+            bool moving = _worker.Wait(out Exception error);
+            if (error == null)
             {
-                bool moving = work.Result;
                 LastWorkMilliseconds = _workMilliseconds;
                 return moving;
             }
-            catch (AggregateException e)
+
+            Debug.LogError($"Ash settling failed: {error}", this);
+            _settler.End();
+            _hasSlideBounds = false;
+            if (_scoopActive)
             {
-                Debug.LogError($"Ash settling failed: {e.GetBaseException()}", this);
-                EndSlide();
-                return false;
+                // The scooped ash is already in the sieve: make sure it's out of the pile, whatever the slide did.
+                _terrain.CarveNow(_pendingCenter, _pendingRadius);
             }
+
+            return false;
         }
 
         private void FireScoopDug()
@@ -303,15 +301,7 @@ namespace Cinderbird.Terrain
             }
 
             _scoopActive = false;
-            _firingScoopDug = true;
-            try
-            {
-                _terrain.CompleteScoop(_scoopResult, _pendingCenter, _pendingRadius);
-            }
-            finally
-            {
-                _firingScoopDug = false;
-            }
+            _terrain.CompleteScoop(_scoopResult, _pendingCenter, _pendingRadius);
         }
 
         private void WriteOut()
@@ -323,9 +313,9 @@ namespace Cinderbird.Terrain
 
             using (SettleMarker.Auto())
             {
-                long started = Stopwatch.GetTimestamp();
+                long started = TimeMeasure.Now();
                 _settler.Commit();
-                LastCommitMilliseconds = MillisecondsSince(started);
+                LastCommitMilliseconds = TimeMeasure.MillisecondsSince(started);
                 LastMeshMilliseconds = 0f;
                 if (_settler.LastCommitChangedAnything)
                 {
@@ -345,7 +335,7 @@ namespace Cinderbird.Terrain
                     PuffDust();
                 }
 
-                LastUpdateMilliseconds = MillisecondsSince(started);
+                LastUpdateMilliseconds = TimeMeasure.MillisecondsSince(started);
                 UpdateCount++;
             }
         }
@@ -378,11 +368,6 @@ namespace Cinderbird.Terrain
                 };
                 _dust.Emit(emit, perSpot);
             }
-        }
-
-        private static float MillisecondsSince(long startTimestamp)
-        {
-            return (float)((Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency);
         }
     }
 }

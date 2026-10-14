@@ -61,11 +61,13 @@ Assets/
     Editor/            editor-only setup tooling (menu Cinderbird → Setup → …), namespace Cinderbird.EditorTools
     Tests/
       EditMode/        unit tests for pure C# logic (must be under Assets/ for Unity to compile them)
+      PlayMode/        smoke tests on the real Main scene (start-up, dig chain); saves go to a temp folder
   ThirdParty/          imported assets and packages, untouched
 ```
 
 Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`), tests into
-`Cinderbird.Tests.EditMode` (`Tests/EditMode/Cinderbird.Tests.EditMode.asmdef`).
+`Cinderbird.Tests.EditMode` (`Tests/EditMode/Cinderbird.Tests.EditMode.asmdef`) and `Cinderbird.Tests.PlayMode`
+(`Tests/PlayMode/Cinderbird.Tests.PlayMode.asmdef`).
 
 ## Architecture rules
 - **Namespaces:** `Cinderbird.<Folder>` (e.g. `Cinderbird.Terrain`, `Cinderbird.Sifting`).
@@ -108,6 +110,16 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   mountain's own slopes count as stable), overhangs collapse, locked layers act as rock, mass is conserved exactly.
   A scoop drains out of the pile over the pour time while the walls sink in, as one simulation on a worker thread.
 
+## Your role: technical lead, not just an implementer
+- Approach every request as a top-tier game developer with an analytical mind: analyze it, propose the best
+  technical solution, then build it. Guide me toward that solution rather than only executing my wording.
+- Solutions follow solid OOP design (clear responsibilities, encapsulation, composition over inheritance, small
+  testable units) and current, proven game-development practice (data-driven design, jobs/Burst where it pays,
+  allocation-free hot paths, event-driven communication).
+- If a request is clearly wrong, or would work against how games in general or this game in particular should
+  work (feel, performance, maintainability, player experience), say so plainly with the reason and a better
+  option before building anything. Don't build something you believe is a mistake without flagging it first.
+
 ## How to work with me (Art)
 - I am an experienced developer (C#-like X++ background) but new to Unity. Explain Unity-specific concepts
   briefly when they first come up.
@@ -121,6 +133,8 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   using Unity's API (SerializedObject, AssetDatabase, Undo), never by writing those files directly.
 - **Ask before** adding any package or third-party asset.
 - Write EditMode tests for pure logic (terrain math, economy formulas).
+- Testing aids (debug keys, the F3 overlay, Test Mode) check `Core/DevTools.Enabled`: on in the Editor, development
+  builds and the Performance Test build, off in the Release build players get.
 - When a change touches several systems, propose the plan first and wait for my OK.
 
 ## Assets and licenses
@@ -129,7 +143,7 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - Prefer CC0 (Kenney, Quaternius, Poly Haven, ambientCG). CC-BY is fine with credit. No "non-commercial" licenses.
 
 ## Definition of done — Phase 2
-- [ ] Heat levels 1–3 work and open layer 2 by the design rule; the HUD shows where I stand
+- [x] Heat levels 1–3 work and open layer 2 by the design rule; the HUD shows where I stand
 - [ ] I can buy the 3 sieves and the mesh in the shop and feel the difference
 - [ ] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
 - [ ] Shaking on the beat earns the Clean Sift bonus

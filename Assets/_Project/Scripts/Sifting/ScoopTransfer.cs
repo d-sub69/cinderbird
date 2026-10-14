@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cinderbird.Embers;
+using Cinderbird.Terrain;
 using UnityEngine;
 
 namespace Cinderbird.Sifting
@@ -33,7 +34,7 @@ namespace Cinderbird.Sifting
         /// <returns>False if a load is already in flight.</returns>
         public bool TryBegin(float volume, List<Ember> embers, float duration)
         {
-            return TryBegin(volume, embers, duration, new Color(0.55f, 0.55f, 0.55f, 1f), new Color(0.78f, 0.76f, 0.74f, 0.8f));
+            return TryBegin(volume, embers, duration, AshColors.DefaultAsh, AshColors.DefaultDust);
         }
 
         /// <returns>False if a load is already in flight.</returns>

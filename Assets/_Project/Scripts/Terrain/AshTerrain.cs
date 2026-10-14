@@ -14,14 +14,16 @@ namespace Cinderbird.Terrain
     {
         // Multiplier keeping each chunk's ember seed distinct but reproducible.
         private const int ChunkSeedStride = 7919;
+        // A grazed ember is laid this far inside the hole's edge, so it ends up in the open.
+        private const float ExposeInset = 0.05f;
 
         private readonly EmberField[] _embers;
         // Chunks whose embers changed since generation; a dig can take embers without changing any sample.
         private readonly bool[] _embersChanged;
         private readonly int[] _emberVersions;
-        // Embers per ash layer: as generated, and still in the pile. Their ratio is how cleared a layer is.
-        private readonly int[] _initialByLayer;
-        private readonly int[] _buriedByLayer;
+        private readonly LayerEmberCounts _counts;
+        private readonly LooseEmberList _loose = new LooseEmberList();
+        private readonly List<Ember> _digScratch = new List<Ember>();
         // Generated surface height per sample column, in samples (x + z * SamplesX).
         private float[] _naturalSurface;
         private readonly List<int> _chunkScratch = new List<int>();
@@ -30,8 +32,7 @@ namespace Cinderbird.Terrain
         {
             World = world;
             Locks = new LayerLocks(layerCount);
-            _initialByLayer = new int[Locks.Count];
-            _buriedByLayer = new int[Locks.Count];
+            _counts = new LayerEmberCounts(Locks.Count);
             _embersChanged = new bool[world.ChunkCount];
             _emberVersions = new int[world.ChunkCount];
             _embers = new EmberField[world.ChunkCount];
@@ -49,7 +50,8 @@ namespace Cinderbird.Terrain
         /// <summary>Cubic meters of ash left; updated on every dig.</summary>
         public float TotalAshVolume { get; private set; }
 
-        public int BuriedEmberCount { get; private set; }
+        /// <summary>Embers still on the mountain: buried, or lying loose until collected.</summary>
+        public int BuriedEmberCount => _counts.Total;
 
         public EmberField EmbersIn(int chunkIndex)
         {
@@ -159,68 +161,57 @@ namespace Cinderbird.Terrain
         public void SpawnLayeredEmbers(LayerSpawnTable table, int seed, float minDensity)
         {
             List<Ember> spawned = new List<Ember>();
-            BuriedEmberCount = 0;
             for (int i = 0; i < _embers.Length; i++)
             {
                 spawned.Clear();
                 EmberSpawner.SpawnLayered(World.GetChunk(i), table, seed * ChunkSeedStride + i, minDensity, spawned);
                 _embers[i].AddRange(spawned);
-                BuriedEmberCount += spawned.Count;
             }
 
             RecountBuried();
-            Array.Copy(_buriedByLayer, _initialByLayer, _buriedByLayer.Length);
+            _counts.SetInitialToCurrent();
         }
 
         /// <summary>Buries one specific ember (e.g. the single Heart Ember) where it says, as part of the mountain.</summary>
         public void PlaceEmber(Ember ember)
         {
             _embers[World.ChunkIndexAt(ember.Position)].Add(ember);
-            BuriedEmberCount++;
-            if (ember.Layer < _buriedByLayer.Length)
-            {
-                _buriedByLayer[ember.Layer]++;
-                _initialByLayer[ember.Layer]++;
-            }
+            _counts.AddGenerated(ember);
         }
 
         /// <summary>Share of a layer's embers already taken out of the pile (0..1); 1 for a layer that had none.</summary>
         public float ClearedShare(int layer)
         {
-            if (layer < 0 || layer >= _initialByLayer.Length || _initialByLayer[layer] == 0)
-            {
-                return 1f;
-            }
-
-            return 1f - _buriedByLayer[layer] / (float)_initialByLayer[layer];
+            return _counts.ClearedShare(layer);
         }
 
         public int InitialEmbersIn(int layer)
         {
-            return layer >= 0 && layer < _initialByLayer.Length ? _initialByLayer[layer] : 0;
+            return _counts.InitialIn(layer);
         }
 
+        /// <summary>Embers of a layer still on the mountain (buried or loose).</summary>
         public int BuriedEmbersIn(int layer)
         {
-            return layer >= 0 && layer < _buriedByLayer.Length ? _buriedByLayer[layer] : 0;
+            return _counts.OnMountainIn(layer);
         }
 
         private void RecountBuried()
         {
-            BuriedEmberCount = 0;
-            Array.Clear(_buriedByLayer, 0, _buriedByLayer.Length);
+            _counts.ClearOnMountain();
             for (int i = 0; i < _embers.Length; i++)
             {
                 EmberField field = _embers[i];
-                BuriedEmberCount += field.Count;
                 for (int e = 0; e < field.Count; e++)
                 {
-                    int layer = field[e].Layer;
-                    if (layer < _buriedByLayer.Length)
-                    {
-                        _buriedByLayer[layer]++;
-                    }
+                    _counts.Returned(field[e]);
                 }
+            }
+
+            // Loose embers are still on the mountain: they count until collected.
+            for (int i = 0; i < _loose.Count; i++)
+            {
+                _counts.Returned(_loose[i].Ember);
             }
         }
 
@@ -228,7 +219,6 @@ namespace Cinderbird.Terrain
         public void SpawnEmbers(EmberSpawnParameters parameters, IReadOnlyList<float> tierWeights)
         {
             List<Ember> spawned = new List<Ember>();
-            BuriedEmberCount = 0;
             for (int i = 0; i < _embers.Length; i++)
             {
                 spawned.Clear();
@@ -236,21 +226,21 @@ namespace Cinderbird.Terrain
                     parameters.EmbersPerCubicMeter, parameters.MinDensity, parameters.Seed * ChunkSeedStride + i);
                 EmberSpawner.Spawn(World.GetChunk(i), chunkParameters, tierWeights, spawned);
                 _embers[i].AddRange(spawned);
-                BuriedEmberCount += spawned.Count;
             }
 
             RecountBuried();
-            Array.Copy(_buriedByLayer, _initialByLayer, _buriedByLayer.Length);
+            _counts.SetInitialToCurrent();
         }
 
         /// <param name="center">World-local position (the terrain object's local space).</param>
         /// <param name="extractedEmbers">Embers inside the sphere are appended here.</param>
         /// <param name="removedByLayer">If given, cubic meters taken from each layer are added to it.</param>
-        /// <param name="emberCatchMargin">Embers this far beyond the dug sphere are caught too (meters).</param>
+        /// <param name="exposedEmbers">If given, embers the dig only grazed are moved here (see <see cref="StartDig"/>).</param>
+        /// <param name="exposeMargin">How far beyond the dug sphere an ember counts as grazed (meters).</param>
         public DigResult Dig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null,
-            float emberCatchMargin = 0f)
+            List<LooseEmber> exposedEmbers = null, float exposeMargin = 0f)
         {
-            DigResult result = StartDig(center, radius, extractedEmbers, removedByLayer, emberCatchMargin);
+            DigResult result = StartDig(center, radius, extractedEmbers, removedByLayer, exposedEmbers, exposeMargin);
             CarveDig(center, radius);
             return result;
         }
@@ -260,41 +250,167 @@ namespace Cinderbird.Terrain
         /// <see cref="Dig"/> would, but carves nothing. Follow with <see cref="CarveDig"/> calls of growing radius,
         /// ending with the full one, and change nothing else in between.
         /// </summary>
+        /// <param name="extractedEmbers">Embers inside the sphere (buried or loose) are appended: they go to the sieve.</param>
+        /// <param name="exposedEmbers">
+        /// Buried embers just beyond the sphere (within <paramref name="exposeMargin"/>): the dig reached their top or
+        /// middle without taking them. They leave the ash, placed just inside the hole's edge, and are appended here
+        /// for the caller to add as loose embers once the hole is open (<see cref="AddLoose(Ember, Vector3)"/>), each
+        /// with where it lay (<see cref="LooseEmber.CameFrom"/>; its id is not set yet). Null leaves them buried.
+        /// </param>
         public DigResult StartDig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer,
-            float emberCatchMargin)
+            List<LooseEmber> exposedEmbers, float exposeMargin)
         {
             DigResult measured = SphereDigBrush.Measure(World, center, radius, Locks, removedByLayer);
-
-            // The sieve catches embers a little beyond the ash it takes, so one scoop on a glimmer gets its ember.
-            float catchRadius = radius + Mathf.Max(0f, emberCatchMargin);
-            Vector3 extent = Vector3.one * catchRadius;
+            float reach = exposedEmbers != null ? radius + Mathf.Max(0f, exposeMargin) : radius;
+            Vector3 extent = Vector3.one * reach;
             World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
             int emberCount = 0;
-            int firstNew = extractedEmbers.Count;
             for (int i = 0; i < _chunkScratch.Count; i++)
             {
                 int chunk = _chunkScratch[i];
-                int extracted = _embers[chunk].ExtractWithin(center, catchRadius, extractedEmbers, Locks);
-                if (extracted > 0)
+                _digScratch.Clear();
+                if (_embers[chunk].ExtractWithin(center, reach, _digScratch, Locks) == 0)
                 {
-                    _embersChanged[chunk] = true;
-                    _emberVersions[chunk]++;
-                    emberCount += extracted;
+                    continue;
+                }
+
+                _embersChanged[chunk] = true;
+                _emberVersions[chunk]++;
+                foreach (Ember ember in _digScratch)
+                {
+                    Vector3 offset = ember.Position - center;
+                    float distance = offset.magnitude;
+                    if (distance <= radius || exposedEmbers == null)
+                    {
+                        extractedEmbers.Add(ember);
+                        _counts.Taken(ember);
+                        emberCount++;
+                    }
+                    else if (TryExposedSpot(center, radius, ember.Position, out Vector3 spot))
+                    {
+                        // Still in the pile as far as clearing goes: only collecting it counts.
+                        exposedEmbers.Add(new LooseEmber(-1, new Ember(spot, ember.TierIndex, ember.Layer), ember.Position));
+                    }
+                    else
+                    {
+                        // No open space at its height: it stays where it is, under a thin cover.
+                        _embers[chunk].Add(ember);
+                    }
                 }
             }
 
-            for (int i = firstNew; i < extractedEmbers.Count; i++)
-            {
-                int layer = extractedEmbers[i].Layer;
-                if (layer < _buriedByLayer.Length)
-                {
-                    _buriedByLayer[layer]--;
-                }
-            }
-
+            emberCount += TakeLooseWithin(center, radius, extractedEmbers);
             TotalAshVolume -= measured.RemovedVolume;
-            BuriedEmberCount -= emberCount;
             return new DigResult(measured.RemovedVolume, emberCount, measured.BlockedLayer);
+        }
+
+        /// <summary>
+        /// Where an ember the dig grazed comes out: straight sideways into the hole at its own height, never up or
+        /// toward the dig, so gravity takes it from there. An ember below the hole's floor or above its top has no
+        /// open space at its height and isn't uncovered.
+        /// </summary>
+        public static bool TryExposedSpot(Vector3 digCenter, float radius, Vector3 ember, out Vector3 spot)
+        {
+            spot = ember;
+            float height = ember.y - digCenter.y;
+            float holeRadiusSquared = radius * radius - height * height;
+            if (holeRadiusSquared <= ExposeInset * ExposeInset * 4f)
+            {
+                return false;
+            }
+
+            Vector2 sideways = new Vector2(ember.x - digCenter.x, ember.z - digCenter.z);
+            float distance = sideways.magnitude;
+            float holeRadius = Mathf.Sqrt(holeRadiusSquared) - ExposeInset;
+            if (distance <= holeRadius)
+            {
+                return true;
+            }
+
+            Vector2 edge = sideways * (holeRadius / distance);
+            spot = new Vector3(digCenter.x + edge.x, ember.y, digCenter.z + edge.y);
+            return true;
+        }
+
+        /// <summary>Embers lying loose on a surface (not buried): uncovered by digs, or dropped. Order may change.</summary>
+        public IReadOnlyList<LooseEmber> LooseEmbers => _loose.Items;
+
+        /// <summary>
+        /// Lays an ember loose at its position; it still counts as in the pile until collected. Once loose it is never
+        /// buried again (<see cref="LooseEmber.Rest"/>).
+        /// </summary>
+        /// <returns>Its id, stable while it stays loose.</returns>
+        public int AddLoose(Ember ember)
+        {
+            return AddLoose(ember, ember.Position);
+        }
+
+        /// <param name="cameFrom">Where it was before lying loose (e.g. its spot in the ash), for views to animate.</param>
+        public int AddLoose(Ember ember, Vector3 cameFrom)
+        {
+            return _loose.Add(ember, cameFrom);
+        }
+
+        /// <summary>A brand-new loose ember (e.g. one that slipped through the sieve): counted as in the pile again.</summary>
+        public int AddDroppedLoose(Ember ember)
+        {
+            _counts.Returned(ember);
+            return AddLoose(ember);
+        }
+
+        /// <returns>The index in <see cref="LooseEmbers"/> of the loose ember with this id, or -1 if it isn't loose (any more).</returns>
+        public int IndexOfLoose(int id)
+        {
+            return _loose.IndexOf(id);
+        }
+
+        public void MoveLoose(int index, Vector3 position)
+        {
+            _loose.MoveTo(index, position);
+        }
+
+        /// <summary>Sets how high a loose ember sits above the ash (<see cref="LooseEmber.Rest"/>); NaN = not known.</summary>
+        public void SetLooseRest(int index, float rest)
+        {
+            _loose.SetRest(index, rest);
+        }
+
+        /// <summary>Collects a loose ember (e.g. into the sieve): it no longer counts as in the pile.</summary>
+        public Ember TakeLoose(int index)
+        {
+            Ember ember = _loose[index].Ember;
+            _loose.RemoveAt(index);
+            _counts.Taken(ember);
+            return ember;
+        }
+
+        /// <summary>Puts back the loose embers from a save; call before <see cref="FinishRestore"/> or recounts itself.</summary>
+        public void ReplaceLoose(IReadOnlyList<Ember> embers)
+        {
+            _loose.Clear();
+            for (int i = 0; i < embers.Count; i++)
+            {
+                AddLoose(embers[i]);
+            }
+
+            RecountBuried();
+        }
+
+        // Loose embers inside a dig go to the sieve with the ash.
+        private int TakeLooseWithin(Vector3 center, float radius, List<Ember> extractedEmbers)
+        {
+            int taken = 0;
+            float radiusSquared = radius * radius;
+            for (int i = _loose.Count - 1; i >= 0; i--)
+            {
+                if ((_loose[i].Ember.Position - center).sqrMagnitude <= radiusSquared)
+                {
+                    extractedEmbers.Add(TakeLoose(i));
+                    taken++;
+                }
+            }
+
+            return taken;
         }
 
         /// <summary>

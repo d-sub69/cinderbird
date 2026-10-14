@@ -12,11 +12,7 @@ namespace Cinderbird.Sifting
     /// </summary>
     public sealed class EmberStreamView : MonoBehaviour
     {
-        private const int MaxFlying = 24;
-        // Same toss as the ash clumps: each ember flies for this share of the pour, starts spread over the rest.
-        private const float FlightShare = 0.6f;
-        // Embers leave from near the dig spot (they lay under it), not from deep inside the pile.
-        private const float StartSpread = 0.25f;
+        // Embers land around the sieve's middle, not all on one point.
         private const float LandingSpreadFraction = 0.5f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -87,11 +83,12 @@ namespace Cinderbird.Sifting
         {
             // World-space container: embers must not move with the sieve once they've left the pile.
             Transform container = new GameObject("Flying Embers").transform;
-            _visuals = new Renderer[MaxFlying];
-            _from = new Vector3[MaxFlying];
-            _landing = new Vector3[MaxFlying];
-            _startTimes = new float[MaxFlying];
-            for (int i = 0; i < MaxFlying; i++)
+            int count = _settings.MaxFlyingEmbers;
+            _visuals = new Renderer[count];
+            _from = new Vector3[count];
+            _landing = new Vector3[count];
+            _startTimes = new float[count];
+            for (int i = 0; i < count; i++)
             {
                 Renderer visual = Instantiate(_emberPrefab, container);
                 visual.name = $"Flying Ember {i}";
@@ -104,23 +101,21 @@ namespace Cinderbird.Sifting
         {
             HideAll();
             IReadOnlyList<Ember> embers = _filler.IncomingEmbers;
-            _activeCount = Mathf.Min(embers.Count, MaxFlying);
+            _activeCount = Mathf.Min(embers.Count, _visuals.Length);
             if (_activeCount == 0)
             {
                 return;
             }
 
-            _flightTime = _settings.FillDuration * FlightShare;
+            _flightTime = _settings.FillDuration * _settings.FlightShare;
             float staggerWindow = Mathf.Max(0f, _settings.FillDuration - _flightTime);
             float now = Time.time;
             float landingRadius = _settings.Radius * LandingSpreadFraction;
             for (int i = 0; i < _activeCount; i++)
             {
                 Ember ember = embers[i];
-                // Leaves from where it lay, seen from above: its spot under the dig, lifted to the surface.
-                Vector3 lay = _pile.transform.TransformPoint(ember.Position);
-                Vector3 offset = Vector3.ClampMagnitude(new Vector3(lay.x - digPoint.x, 0f, lay.z - digPoint.z), StartSpread);
-                _from[i] = digPoint + offset;
+                // Leaves from exactly where it lay (under its glimmer, or on the ground), never from a made-up spot.
+                _from[i] = _pile.transform.TransformPoint(ember.Position);
                 Vector2 landing = RandomInDisc(landingRadius);
                 _landing[i] = new Vector3(landing.x, 0f, landing.y);
                 // Spread over the middle of the pour, so the embers come out among the ash, not first or last.
@@ -168,15 +163,18 @@ namespace Cinderbird.Sifting
         {
             GameObject visual = _visuals[index].gameObject;
             float progress = elapsed / _flightTime;
-            if (progress < 0f || progress >= 1f)
+            if (progress >= 1f)
             {
                 if (visual.activeSelf)
                 {
                     visual.SetActive(false);
                 }
 
-                return progress < 0f;
+                return false;
             }
+
+            // Waiting its turn: it stays where it lay (its glimmer is gone), so it never blinks out and back.
+            progress = Mathf.Max(0f, progress);
 
             if (!visual.activeSelf)
             {

@@ -1,4 +1,5 @@
 using System;
+using Cinderbird.Core;
 using Cinderbird.Terrain;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -26,6 +27,8 @@ namespace Cinderbird.Player
 
         // Reused buffer for the no-placement-zone overlap query; avoids allocating every frame.
         private readonly Collider[] _zoneHits = new Collider[8];
+        private readonly ComponentLookup<VoxelTerrain> _terrains = new ComponentLookup<VoxelTerrain>();
+        private readonly ComponentLookup<NoPlacementZone> _zones = new ComponentLookup<NoPlacementZone>();
         private MaterialPropertyBlock _propertyBlock;
         private PlaceableTool _shownGhostOwner;
         private Renderer[] _ghostRenderers = Array.Empty<Renderer>();
@@ -136,7 +139,7 @@ namespace Cinderbird.Player
             // Upright, turned to face the same way as the player.
             _placeRotation = Quaternion.Euler(0f, _camera.eulerAngles.y, 0f);
 
-            bool onAsh = hit.collider.GetComponentInParent<VoxelTerrain>() != null;
+            bool onAsh = _terrains.Find(hit.collider) != null;
             float clearance = _settings.PlaceClearance;
             // Lifted just off the ground so the ground itself doesn't count as an obstacle.
             Vector3 probe = hit.point + Vector3.up * (clearance + 0.02f);
@@ -152,7 +155,7 @@ namespace Cinderbird.Player
             int count = Physics.OverlapSphereNonAlloc(point, radius, _zoneHits, Physics.AllLayers, QueryTriggerInteraction.Collide);
             for (int i = 0; i < count; i++)
             {
-                NoPlacementZone zone = _zoneHits[i].GetComponentInParent<NoPlacementZone>();
+                NoPlacementZone zone = _zones.Find(_zoneHits[i]);
                 if (zone != null)
                 {
                     return zone;

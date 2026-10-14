@@ -71,6 +71,8 @@ namespace Cinderbird.UI
         private float _worstSettleCommitSinceLog;
         private float _worstSettleMeshSinceLog;
         private float _lastSettleMilliseconds;
+        private int _lastSeenUpload;
+        private float _worstUploadSinceLog;
         private bool _pausedOrLoading;
 
         private void Awake()
@@ -78,6 +80,14 @@ namespace Cinderbird.UI
             if (_text == null || _terrain == null || _toggleAction == null)
             {
                 Debug.LogError($"{nameof(PerformanceOverlay)} on '{name}' has unassigned references.", this);
+                enabled = false;
+                return;
+            }
+
+            if (!DevTools.Enabled)
+            {
+                // A testing aid: players get neither the overlay nor its log lines.
+                _text.enabled = false;
                 enabled = false;
                 return;
             }
@@ -176,7 +186,8 @@ namespace Cinderbird.UI
             b.Append(" | saves=").AppendInt(_savesSinceLog).Append(" save_max=").AppendFixed(_worstSaveSinceLog, 1).Append("ms");
             b.Append(" | settles=").AppendInt(_settleUpdatesSinceLog).Append(" settle_max=").AppendFixed(_worstSettleSinceLog, 1)
                 .Append("ms (write ").AppendFixed(_worstSettleCommitSinceLog, 1).Append(" mesh ").AppendFixed(_worstSettleMeshSinceLog, 1)
-                .Append(") work_max=").AppendFixed(_worstSettleWorkSinceLog, 1).Append("ms");
+                .Append(") upload_max=").AppendFixed(_worstUploadSinceLog, 1)
+                .Append("ms work_max=").AppendFixed(_worstSettleWorkSinceLog, 1).Append("ms");
             if (_bootstrap != null)
             {
                 b.Append(" | start=").AppendFixed(_bootstrap.StartupSeconds, 2).Append('s');
@@ -195,6 +206,7 @@ namespace Cinderbird.UI
             _worstSettleWorkSinceLog = 0f;
             _worstSettleCommitSinceLog = 0f;
             _worstSettleMeshSinceLog = 0f;
+            _worstUploadSinceLog = 0f;
             _worstGcSinceLog = 0;
             _gcFramesSinceLog = 0;
             _skipGcFrames = 2;
@@ -241,6 +253,13 @@ namespace Cinderbird.UI
                 _worstSettleMeshSinceLog = Mathf.Max(_worstSettleMeshSinceLog, _settling.LastMeshMilliseconds);
             }
 
+            // Sliding ash is meshed on workers and uploaded a frame later; that upload is main-thread time too.
+            if (_terrain.UploadCount != _lastSeenUpload)
+            {
+                _lastSeenUpload = _terrain.UploadCount;
+                _worstUploadSinceLog = Mathf.Max(_worstUploadSinceLog, _terrain.LastUploadMilliseconds);
+            }
+
             // A save happened when its timing changes; the value itself is that save's main-thread time.
             if (_save != null && _save.LastCaptureMilliseconds != _lastSeenSave)
             {
@@ -257,8 +276,11 @@ namespace Cinderbird.UI
             }
 
             FrameTiming timing = _timings[0];
-            // The main thread's own work: its frame time minus the time it waited to present (VSync, GPU).
-            _mainThread.Add((float)(timing.cpuMainThreadFrameTime - timing.cpuMainThreadPresentWaitTime));
+            // The main thread's own work: its frame time minus the time it waited to present (VSync, GPU). With VSync on the
+            // wait can be reported for another frame than the frame time (it came out negative); the frame time alone is
+            // then the closer figure. Measure with VSync off for exact numbers.
+            float work = (float)(timing.cpuMainThreadFrameTime - timing.cpuMainThreadPresentWaitTime);
+            _mainThread.Add(work >= 0f ? work : (float)timing.cpuMainThreadFrameTime);
             if (timing.gpuFrameTime > 0d)
             {
                 _gpu.Add((float)timing.gpuFrameTime);

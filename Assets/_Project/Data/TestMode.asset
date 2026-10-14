@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53385dd4a9fc4354a900ab5a987f8b3e, type: 3}
   m_Name: TestMode
   m_EditorClassIdentifier: Cinderbird::Cinderbird.Core.TestModeSettings
-  _enabled: 1
-  _scoopRadiusMultiplier: 10
+  _enabled: 0
+  _scoopRadiusMultiplier: 1
   _skipShaking: 1
   _unlimitedSieveEmbers: 1

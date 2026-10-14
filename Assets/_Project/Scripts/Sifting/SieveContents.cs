@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cinderbird.Embers;
+using Cinderbird.Terrain;
 using UnityEngine;
 
 namespace Cinderbird.Sifting
@@ -12,8 +13,6 @@ namespace Cinderbird.Sifting
     /// </summary>
     public sealed class SieveContents : IEmberSource
     {
-        private static readonly Color DefaultAshColor = new Color(0.55f, 0.55f, 0.55f, 1f);
-        private static readonly Color DefaultDustColor = new Color(0.78f, 0.76f, 0.74f, 0.8f);
 
         private readonly List<Ember> _embers = new List<Ember>();
 
@@ -36,10 +35,10 @@ namespace Cinderbird.Sifting
         public bool CanScoop => AshVolume <= 0f && !IsFullOfEmbers;
 
         /// <summary>Color of the current load's ash, blended from the layers it was dug from.</summary>
-        public Color AshColor { get; private set; } = DefaultAshColor;
+        public Color AshColor { get; private set; } = AshColors.DefaultAsh;
 
         /// <summary>Color of the dust the current load sheds when shaken.</summary>
-        public Color DustColor { get; private set; } = DefaultDustColor;
+        public Color DustColor { get; private set; } = AshColors.DefaultDust;
 
         /// <summary>Ash volume of the current load when it was scooped; each scoop starts a new load.</summary>
         public float LoadVolume { get; private set; }
@@ -50,7 +49,7 @@ namespace Cinderbird.Sifting
         /// <returns>False (and nothing changes) when the sieve still holds ash.</returns>
         public bool TryAdd(float ashVolume, List<Ember> embers)
         {
-            return TryAdd(ashVolume, embers, DefaultAshColor, DefaultDustColor);
+            return TryAdd(ashVolume, embers, AshColors.DefaultAsh, AshColors.DefaultDust);
         }
 
         /// <summary>

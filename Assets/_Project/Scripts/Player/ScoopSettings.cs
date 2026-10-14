@@ -12,12 +12,17 @@ namespace Cinderbird.Player
         [Tooltip("How far the sphere's center goes past the surface, as a fraction of the radius. " +
                  "0 = centered on the surface (shallow), 1 = whole sphere below it (deep).")]
         [SerializeField, Range(0f, 1f)] private float _penetration = 0.5f;
-        [Tooltip("Embers up to this far beyond the carved sphere are caught too, in meters, so a scoop on a glimmer gets its ember.")]
-        [SerializeField, Min(0f)] private float _emberCatchMargin = 0.25f;
+        [Tooltip("Embers up to this far beyond the carved sphere are uncovered by the scoop (it reached their top or middle): " +
+                 "they are left lying loose in the hole, glowing, to be picked up. In meters.")]
+        [SerializeField, Min(0f)] private float _emberExposeMargin = 0.25f;
+        [Tooltip("A loose ember this many meters behind the ash surface in the aim line still counts as aimed at, so one " +
+                 "half sunk into the ash can be picked up.")]
+        [SerializeField, Min(0f)] private float _looseEmberAimDepth = 0.15f;
 
         public float Reach => _reach;
         public float Radius => _radius;
         public float Penetration => _penetration;
-        public float EmberCatchMargin => _emberCatchMargin;
+        public float EmberExposeMargin => _emberExposeMargin;
+        public float LooseEmberAimDepth => _looseEmberAimDepth;
     }
 }

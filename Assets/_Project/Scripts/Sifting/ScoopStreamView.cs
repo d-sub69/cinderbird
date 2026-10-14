@@ -8,8 +8,6 @@ namespace Cinderbird.Sifting
     /// </summary>
     public sealed class ScoopStreamView : MonoBehaviour
     {
-        // Each clump flies for this share of the pour; the rest is used to stagger their starts.
-        private const float FlightShare = 0.6f;
         private const int MinClumps = 6;
         // Clumps leave from around the dig spot and land around the sieve's middle, not all on one point.
         private const float DigSpread = 0.15f;
@@ -121,10 +119,15 @@ namespace Cinderbird.Sifting
         private void OnFillStarted(float volume, Vector3 digPoint)
         {
             HideAll();
+            // A load without ash (a loose ember picked up on its own) has no clumps or dust to show.
+            if (volume <= 0f)
+            {
+                return;
+            }
 
             float liters = volume * 1000f;
             _activeCount = Mathf.Clamp(Mathf.RoundToInt(liters * _settings.ClumpsPerLiter), MinClumps, _clumps.Length);
-            _flightTime = _settings.FillDuration * FlightShare;
+            _flightTime = _settings.FillDuration * _settings.FlightShare;
             float staggerWindow = Mathf.Max(0f, _settings.FillDuration - _flightTime);
             float now = Time.time;
             float landingRadius = _settings.Radius * LandingSpreadFraction;

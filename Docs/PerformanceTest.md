@@ -13,7 +13,8 @@ Staying inside it there should keep the minimum spec (GTX 1050, i5-6500, 8 GB RA
 | CPU (avg and p95) | ≤ 6 ms | Main-thread work per frame, without waiting for VSync or the GPU |
 | GPU (avg and p95) | ≤ 4 ms | GPU time per frame |
 | GC | 0 B/frame | Managed garbage per frame in normal play (worst frame of each refresh) |
-| Dig | ≤ 4 ms | One scoop: carve, re-mesh, bake colliders |
+| Dig | ≤ 4 ms | One scoop on the main thread: taking its ash and embers (the hole then drains open in settling updates) |
+| Settle | ≤ 4 ms | One settling update on the main thread: writing the sliding ash and starting its re-mesh (`settle_max`), plus uploading the new meshes a frame later (`upload_max`). Each must stay under the budget, and leave room in the 6 ms CPU budget |
 | Save | ≤ 2 ms | Main-thread part of an autosave |
 | Start | ≤ 3 s | Scene start to player control (build mountain + load save) |
 
@@ -21,11 +22,12 @@ Red in the overlay = over budget. "p95" is the time 95% of frames stay under; it
 
 ## Setup
 
-1. **Cinderbird → Build → Windows - Release** (frame rates) and **Windows - Development** (garbage figure,
-   Profiler). Builds land in `Builds/` next to `Assets/`.
+1. **Cinderbird → Build → Windows - Performance Test** (frame rates: a release build with the debug keys and the
+   F3 overlay on) and **Windows - Development** (garbage figure, Profiler). Builds land in `Builds/` next to
+   `Assets/`. The plain **Windows - Release** build is what players get: no debug keys, no overlay, no Test Mode.
 2. In the game: Esc → Options → Display mode **Windowed**, Resolution **1920 × 1080**, VSync **off**,
    Frame rate limit **Unlimited**, Graphics quality **Medium**. Back, Resume.
-3. Close other heavy programs (browser video, other games, Unity itself for the release build).
+3. Close other heavy programs (browser video, other games, Unity itself for the Performance Test build).
 4. F3 shows the overlay (on by default); keep it on, the log lines are only written while it shows.
 
 ## Route (about 3 minutes)
@@ -43,8 +45,8 @@ Start each run with **F8** (fresh mountain) so runs are comparable, then:
 | 7 | Press **F9** (reload, now with a save to load) and wait 10 s. | start |
 | 8 | Repeat 2 on **High** and **Low** quality (optional). | GPU |
 
-Run the route in the **Release** build for frame times, then steps 2 and 4 in the **Development** build for the
-**gc_worst** figure (Development builds run a bit slower, and Release builds may not count garbage).
+Run the route in the **Performance Test** build for frame times, then steps 2 and 4 in the **Development** build for the
+**gc_worst** figure (Development builds run a bit slower, and release builds may not count garbage).
 
 ## Results
 

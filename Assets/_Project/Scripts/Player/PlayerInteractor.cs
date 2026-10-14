@@ -1,4 +1,5 @@
 using System;
+using Cinderbird.Core;
 using Cinderbird.Embers;
 using UnityEngine;
 
@@ -14,6 +15,9 @@ namespace Cinderbird.Player
         [SerializeField] private ToolBeltSettings _settings;
         [Tooltip("Layers the interaction ray can hit.")]
         [SerializeField] private LayerMask _hitMask = ~0;
+
+        private readonly ComponentLookup<IPourTarget> _pourTargets = new ComponentLookup<IPourTarget>();
+        private readonly ComponentLookup<PlaceableTool> _placeables = new ComponentLookup<PlaceableTool>();
 
         /// <summary>What the player could pour into right now, or null.</summary>
         public IPourTarget PourTarget { get; private set; }
@@ -45,8 +49,8 @@ namespace Cinderbird.Player
             // Triggers count: interactables use trigger volumes so they can be bigger than their solid parts.
             if (Physics.Raycast(ray, out RaycastHit hit, _settings.InteractReach, _hitMask, QueryTriggerInteraction.Collide))
             {
-                pourTarget = hit.collider.GetComponentInParent<IPourTarget>();
-                pickUpTarget = hit.collider.GetComponentInParent<PlaceableTool>();
+                pourTarget = _pourTargets.Find(hit.collider);
+                pickUpTarget = _placeables.Find(hit.collider);
                 if (pickUpTarget != null && !pickUpTarget.IsPlaced)
                 {
                     pickUpTarget = null;

@@ -86,6 +86,7 @@ namespace Cinderbird.UI
             _pile.LayerUnlocked += OnLayerUnlocked;
             _pile.Restored += OnPileChanged;
             _pile.Built += OnPileChanged;
+            _pile.EmbersCollected += OnPileChanged;
             OnPileChanged();
             if (_save != null)
             {
@@ -123,6 +124,7 @@ namespace Cinderbird.UI
             _pile.LayerUnlocked -= OnLayerUnlocked;
             _pile.Restored -= OnPileChanged;
             _pile.Built -= OnPileChanged;
+            _pile.EmbersCollected -= OnPileChanged;
             if (_save != null)
             {
                 _save.Notice -= ShowMessage;

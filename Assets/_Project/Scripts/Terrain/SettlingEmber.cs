@@ -4,12 +4,13 @@ using UnityEngine;
 namespace Cinderbird.Terrain
 {
     /// <summary>
-    /// An ember inside loose ash that may slide, as <see cref="AshSettler"/> tracks it: which column it's in and
-    /// how much ash lies below it there, so it moves with the ash around it.
+    /// An ember in or on loose ash that may slide, as <see cref="AshSettler"/> tracks it: which column it's in and
+    /// how much ash lies below it there, so it moves with the ash around it. Buried and loose embers alike.
     /// </summary>
     public readonly struct SettlingEmber
     {
-        public SettlingEmber(Ember ember, int chunk, int column, float ashBelow, Vector2 offset, bool needsPlacing)
+        public SettlingEmber(Ember ember, int chunk, int column, float ashBelow, Vector2 offset, bool needsPlacing, int looseId = -1,
+            float rest = LooseEmber.UnknownRest)
         {
             Ember = ember;
             Chunk = chunk;
@@ -17,12 +18,14 @@ namespace Cinderbird.Terrain
             AshBelow = ashBelow;
             Offset = offset;
             NeedsPlacing = needsPlacing;
+            LooseId = looseId;
+            Rest = rest;
         }
 
         /// <summary>The ember as it's stored in the terrain right now.</summary>
         public Ember Ember { get; }
 
-        /// <summary>The chunk whose list holds it; -1 once it's gone (dug out meanwhile).</summary>
+        /// <summary>The chunk whose list holds a buried ember; -1 once it's gone (dug out or picked up meanwhile).</summary>
         public int Chunk { get; }
 
         /// <summary>Index of its column in the settling area.</summary>
@@ -40,14 +43,22 @@ namespace Cinderbird.Terrain
         /// </summary>
         public bool NeedsPlacing { get; }
 
+        /// <summary>The id of an ember lying loose on the ash (<see cref="AshTerrain.LooseEmbers"/>); -1 when buried.</summary>
+        public int LooseId { get; }
+
+        public bool IsLoose => LooseId >= 0;
+
+        /// <summary>For a loose ember: how high its center sits above the ash surface (<see cref="LooseEmber.Rest"/>).</summary>
+        public float Rest { get; }
+
         public SettlingEmber MovedTo(int column, float ashBelow)
         {
-            return new SettlingEmber(Ember, Chunk, column, ashBelow, Offset, true);
+            return new SettlingEmber(Ember, Chunk, column, ashBelow, Offset, true, LooseId, Rest);
         }
 
         public SettlingEmber StoredAs(Ember ember, int chunk)
         {
-            return new SettlingEmber(ember, chunk, Column, AshBelow, Offset, false);
+            return new SettlingEmber(ember, chunk, Column, AshBelow, Offset, false, LooseId, Rest);
         }
     }
 }

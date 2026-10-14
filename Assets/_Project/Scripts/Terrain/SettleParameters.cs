@@ -7,7 +7,9 @@ namespace Cinderbird.Terrain
     public readonly struct SettleParameters
     {
         /// <param name="maxFlowPerStep">Most ash (in samples' worth) a column may shed per step; 0 = no limit.</param>
-        public SettleParameters(float reposeAngleDegrees, float reach, float flowRate, float maxFlowPerStep = 0f)
+        /// <param name="minSlideForDust">Ash (in samples' worth) a column must lose between commits to count as a dust spot.</param>
+        public SettleParameters(float reposeAngleDegrees, float reach, float flowRate, float maxFlowPerStep = 0f,
+            float minSlideForDust = 0.15f)
         {
             if (reposeAngleDegrees <= 0f || reposeAngleDegrees >= 90f)
             {
@@ -18,6 +20,7 @@ namespace Cinderbird.Terrain
             Reach = Mathf.Max(0f, reach);
             FlowRate = Mathf.Clamp(flowRate, 0.05f, 1f);
             MaxFlowPerStep = maxFlowPerStep > 0f ? maxFlowPerStep : float.MaxValue;
+            MinSlideForDust = Mathf.Max(0f, minSlideForDust);
         }
 
         /// <summary>The steepest slope loose ash rests at (about 35° for dry ash).</summary>
@@ -34,6 +37,9 @@ namespace Cinderbird.Terrain
         /// steps and the slide looks like a snap; capped, ash runs at a steady pace like a real trickle.
         /// </summary>
         public float MaxFlowPerStep { get; }
+
+        /// <summary>How much ash a column must lose between commits to puff dust there.</summary>
+        public float MinSlideForDust { get; }
 
         /// <summary>Highest stable height difference between neighbors one cell apart, in cells.</summary>
         public float MaxRisePerCell => Mathf.Tan(ReposeAngleDegrees * Mathf.Deg2Rad);

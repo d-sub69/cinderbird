@@ -1,3 +1,4 @@
+using Cinderbird.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -5,6 +6,7 @@ namespace Cinderbird.Terrain
 {
     /// <summary>
     /// Testing aid: a key (F4) opens the next ash layer. In the full game layers open with Heat levels.
+    /// Only where <see cref="DevTools"/> are on.
     /// </summary>
     [RequireComponent(typeof(VoxelTerrain))]
     public sealed class DebugLayerUnlocker : MonoBehaviour
@@ -16,6 +18,12 @@ namespace Cinderbird.Terrain
         private void Awake()
         {
             _terrain = GetComponent<VoxelTerrain>();
+            if (!DevTools.Enabled)
+            {
+                enabled = false;
+                return;
+            }
+
             if (_unlockAction == null)
             {
                 Debug.LogError($"{nameof(DebugLayerUnlocker)} on '{name}' has no unlock action.", this);

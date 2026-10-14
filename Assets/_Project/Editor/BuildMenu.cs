@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Cinderbird.Core;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -8,7 +9,9 @@ namespace Cinderbird.EditorTools
 {
     /// <summary>
     /// One-click Windows builds into Builds/ (ignored by Git). The development build allows the Profiler to
-    /// attach and reports garbage per frame; the release build is what players get, for honest frame rates.
+    /// attach and reports garbage per frame; the release build is what players get (no debug keys or overlay); the
+    /// performance-test build is a release build with the testing aids on (<see cref="DevTools"/>), for honest
+    /// frame rates measured with the F3 overlay.
     /// </summary>
     internal static class BuildMenu
     {
@@ -26,7 +29,13 @@ namespace Cinderbird.EditorTools
             Build("Windows-Release", BuildOptions.None);
         }
 
-        private static void Build(string folderName, BuildOptions options)
+        [MenuItem("Cinderbird/Build/Windows - Performance Test")]
+        private static void BuildPerformanceTest()
+        {
+            Build("Windows-PerfTest", BuildOptions.None, DevTools.PerfTestDefine);
+        }
+
+        private static void Build(string folderName, BuildOptions options, params string[] extraDefines)
         {
             List<string> scenes = new List<string>();
             foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
@@ -50,6 +59,7 @@ namespace Cinderbird.EditorTools
                 locationPathName = executable,
                 target = BuildTarget.StandaloneWindows64,
                 options = options,
+                extraScriptingDefines = extraDefines,
             };
 
             BuildReport report = BuildPipeline.BuildPlayer(build);

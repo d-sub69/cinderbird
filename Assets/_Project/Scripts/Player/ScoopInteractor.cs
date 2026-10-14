@@ -23,18 +23,22 @@ namespace Cinderbird.Player
         [SerializeField] private LayerMask _hitMask = ~0;
         [Tooltip("Optional: test mode can make the scoop bigger and drop its ash on the way.")]
         [SerializeField] private TestModeSettings _testMode;
+        [Tooltip("Optional: embers lying loose can be picked up with a click.")]
+        [SerializeField] private LooseEmberView _looseEmbers;
 
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
+        private readonly ComponentLookup<VoxelTerrain> _terrains = new ComponentLookup<VoxelTerrain>();
         private float[] _removedByLayer = System.Array.Empty<float>();
         private VoxelTerrain _targetTerrain;
         private Vector3 _targetCenter;
         private Vector3 _targetSurfacePoint;
+        private int _aimedLooseId = -1;
 
         /// <summary>Fired when a click on the pile is refused, with the reason (for player feedback).</summary>
         public event System.Action<ScoopRefusal> ScoopRefused;
 
-        /// <summary>True when the view ray hits diggable ash within reach this frame.</summary>
-        public bool HasTarget => _targetTerrain != null;
+        /// <summary>True when the view ray hits diggable ash or a loose ember within reach this frame.</summary>
+        public bool HasTarget => _targetTerrain != null || _aimedLooseId >= 0;
 
         private float ScoopRadius => _settings.Radius * (_testMode != null ? _testMode.ScoopRadiusMultiplier : 1f);
 
@@ -80,6 +84,7 @@ namespace Cinderbird.Player
         private void UpdateTarget()
         {
             _targetTerrain = null;
+            _aimedLooseId = -1;
             // Scooping needs the sieve in hand; a stowed sieve is inactive.
             if (!_sieve.isActiveAndEnabled)
             {
@@ -87,25 +92,32 @@ namespace Cinderbird.Player
             }
 
             Ray ray = new Ray(_camera.position, _camera.forward);
-            if (!Physics.Raycast(ray, out RaycastHit hit, _settings.Reach, _hitMask, QueryTriggerInteraction.Ignore))
+            float hitDistance = float.MaxValue;
+            if (Physics.Raycast(ray, out RaycastHit hit, _settings.Reach, _hitMask, QueryTriggerInteraction.Ignore))
             {
-                return;
+                hitDistance = hit.distance;
+                VoxelTerrain terrain = _terrains.Find(hit.collider);
+                if (terrain != null)
+                {
+                    _targetTerrain = terrain;
+                    _targetSurfacePoint = hit.point;
+                    // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
+                    _targetCenter = hit.point + ray.direction * (ScoopRadius * _settings.Penetration);
+                }
             }
 
-            VoxelTerrain terrain = hit.collider.GetComponentInParent<VoxelTerrain>();
-            if (terrain != null)
+            // An ember lying in sight wins over the ash behind it: clicking picks it up on its own.
+            if (_looseEmbers != null && _looseEmbers.TryFindAimed(ray, _settings.Reach, out int id, out float distance)
+                && distance <= hitDistance + _settings.LooseEmberAimDepth)
             {
-                _targetTerrain = terrain;
-                _targetSurfacePoint = hit.point;
-                // Pushing the sphere into the surface along the view ray takes a real bite instead of a shallow dent.
-                _targetCenter = hit.point + ray.direction * (ScoopRadius * _settings.Penetration);
+                _aimedLooseId = id;
             }
         }
 
         private void TryScoop()
         {
             bool pouring = _filler != null && _filler.IsFilling;
-            if (_targetTerrain == null || pouring)
+            if (!HasTarget || pouring)
             {
                 return;
             }
@@ -125,12 +137,18 @@ namespace Cinderbird.Player
             }
 
             _extractedEmbers.Clear();
+            bool pours = _filler != null && _filler.isActiveAndEnabled;
+            if (_aimedLooseId >= 0)
+            {
+                PickUpLoose(contents, pours);
+                return;
+            }
+
             float[] removedByLayer = LayerBuffer(_targetTerrain.LayerCount);
             // The hole opens while the ash pours into the sieve, so the pile empties as the sieve fills.
-            bool pours = _filler != null && _filler.isActiveAndEnabled;
             float carveSeconds = pours ? _filler.PourDuration : 0f;
             DigResult result = _targetTerrain.Dig(_targetCenter, ScoopRadius, _extractedEmbers, removedByLayer,
-                _settings.EmberCatchMargin, carveSeconds);
+                _settings.EmberExposeMargin, carveSeconds);
             if (!result.RemovedAnyAsh && result.EmberCount == 0)
             {
                 return;
@@ -149,6 +167,24 @@ namespace Cinderbird.Player
             }
 
             contents.TryAdd(ashIntoSieve, _extractedEmbers, ashColor, dustColor);
+        }
+
+        // A loose ember hops into the sieve on its own, without ash, from wherever it lies.
+        private void PickUpLoose(SieveContents contents, bool pours)
+        {
+            if (!_looseEmbers.TryTake(_aimedLooseId, out Ember ember, out Vector3 position))
+            {
+                return;
+            }
+
+            _extractedEmbers.Add(ember);
+            if (pours)
+            {
+                _filler.TryBegin(0f, _extractedEmbers, position);
+                return;
+            }
+
+            contents.TryAdd(0f, _extractedEmbers);
         }
 
         // Reused between digs; only reallocated if the terrain's layer count changes.

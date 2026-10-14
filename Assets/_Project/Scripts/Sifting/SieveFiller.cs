@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Cinderbird.Embers;
+using Cinderbird.Terrain;
 using UnityEngine;
 
 namespace Cinderbird.Sifting
@@ -45,7 +46,7 @@ namespace Cinderbird.Sifting
         /// <returns>False if a pour is already running.</returns>
         public bool TryBegin(float volume, List<Ember> embers, Vector3 digPoint)
         {
-            return TryBegin(volume, embers, digPoint, new Color(0.55f, 0.55f, 0.55f, 1f), new Color(0.78f, 0.76f, 0.74f, 0.8f));
+            return TryBegin(volume, embers, digPoint, AshColors.DefaultAsh, AshColors.DefaultDust);
         }
 
         /// <param name="ashColor">Color of the load's ash (from the layers it was dug from).</param>

@@ -10,7 +10,7 @@ namespace Cinderbird.Terrain
         [Tooltip("Ash color: tints the cut faces of this layer and the ash scooped from it into the sieve.")]
         [SerializeField] private Color _tint = Color.grey;
         [Tooltip("Color of the dust this layer's ash sheds when shaken and when dug.")]
-        [SerializeField] private Color _dustColor = new Color(0.78f, 0.76f, 0.74f, 0.8f);
+        [SerializeField] private Color _dustColor = AshColors.DefaultDust;
         [Tooltip("Depth below the mountain's original surface, in meters, where this layer begins. Ignored for the last (pocket) layer.")]
         [SerializeField, Min(0f)] private float _startDepth;
 

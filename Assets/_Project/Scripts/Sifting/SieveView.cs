@@ -158,7 +158,8 @@ namespace Cinderbird.Sifting
                 return LoadHeight(contents.LoadVolume) * contents.AshFraction;
             }
 
-            if (_filler != null && _filler.IsFilling)
+            // A load without ash (a loose ember picked up on its own, or test mode) brings no ash to show.
+            if (_filler != null && _filler.IsFilling && _filler.IncomingVolume > 0f)
             {
                 return LoadHeight(_filler.IncomingVolume) * _filler.IncomingProgress;
             }

@@ -15,9 +15,6 @@ namespace Cinderbird.Embers
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
-        // How often the nearest glimmers are re-picked as the viewer moves; picking walks every candidate.
-        private const float ReselectInterval = 0.5f;
-
         [SerializeField] private GlimmerSettings _settings;
         [SerializeField] private EmberTierCatalog _tierCatalog;
         [Tooltip("Small sphere with an emissive URP Lit material and no collider (Ember_Visual works).")]
@@ -29,15 +26,11 @@ namespace Cinderbird.Embers
         private Renderer[] _visuals;
         private Color[] _emissionColors;
         private float[] _phases;
-        private int _activeCount;
+        private GlimmerSelection _selection;
         private List<GlimmerPoint>[] _chunkCandidates;
         private readonly List<int> _chunkScratch = new List<int>();
         private MaterialPropertyBlock _propertyBlock;
         private float _nextReselectTime;
-
-        // Nearest-N selection buffers, reused so picking doesn't allocate.
-        private float[] _bestDistances;
-        private GlimmerPoint[] _best;
 
         private void Awake()
         {
@@ -112,13 +105,15 @@ namespace Cinderbird.Embers
                 Reselect();
             }
 
+            GlideToTargets();
+
             if (_settings.TwinkleSpeed <= 0f)
             {
                 return;
             }
 
             float time = Time.time;
-            for (int i = 0; i < _activeCount; i++)
+            for (int i = 0; i < _selection.Count; i++)
             {
                 float dim = GlimmerTwinkle.Dim(time, _phases[i], _settings.TwinkleSpeed, _settings.TwinkleAmount);
                 ApplyColor(i, _emissionColors[i] * dim);
@@ -191,8 +186,7 @@ namespace Cinderbird.Embers
             _visuals = new Renderer[count];
             _emissionColors = new Color[count];
             _phases = new float[count];
-            _bestDistances = new float[count];
-            _best = new GlimmerPoint[count];
+            _selection = new GlimmerSelection(count);
 
             for (int i = 0; i < count; i++)
             {
@@ -231,40 +225,13 @@ namespace Cinderbird.Embers
             }
         }
 
-        // Keeps the N candidates nearest the viewer with a small insertion sort; N is a couple dozen.
+        // Shows the glimmers nearest the viewer; ones that moved a little glide there (see <see cref="GlimmerSelection"/>).
         private void Reselect()
         {
-            _nextReselectTime = Time.time + ReselectInterval;
-            Vector3 eye = transform.InverseTransformPoint(_viewer.position);
-            int capacity = _visuals.Length;
-            int count = 0;
-
-            for (int chunk = 0; chunk < _chunkCandidates.Length; chunk++)
-            {
-                List<GlimmerPoint> candidates = _chunkCandidates[chunk];
-                for (int i = 0; i < candidates.Count; i++)
-                {
-                    float distance = (candidates[i].SurfacePosition - eye).sqrMagnitude;
-                    if (count == capacity && distance >= _bestDistances[count - 1])
-                    {
-                        continue;
-                    }
-
-                    int slot = count < capacity ? count++ : count - 1;
-                    while (slot > 0 && _bestDistances[slot - 1] > distance)
-                    {
-                        _bestDistances[slot] = _bestDistances[slot - 1];
-                        _best[slot] = _best[slot - 1];
-                        slot--;
-                    }
-
-                    _bestDistances[slot] = distance;
-                    _best[slot] = candidates[i];
-                }
-            }
-
-            _activeCount = count;
-            for (int i = 0; i < capacity; i++)
+            _nextReselectTime = Time.time + _settings.ReselectInterval;
+            _selection.Pick(_chunkCandidates, transform.InverseTransformPoint(_viewer.position), _settings.FollowDistance);
+            int count = _selection.Count;
+            for (int i = 0; i < _visuals.Length; i++)
             {
                 bool active = i < count;
                 if (_visuals[i].gameObject.activeSelf != active)
@@ -274,7 +241,19 @@ namespace Cinderbird.Embers
 
                 if (active)
                 {
-                    ShowGlimmer(i, _best[i]);
+                    ShowGlimmer(i, _selection[i]);
+                }
+            }
+        }
+
+        private void GlideToTargets()
+        {
+            float follow = 1f - Mathf.Exp(-_settings.FollowRate * Time.deltaTime);
+            for (int i = 0; i < _selection.Count; i++)
+            {
+                if (_selection.Glide(i, follow))
+                {
+                    _visuals[i].transform.localPosition = _selection.ShownAt(i);
                 }
             }
         }
@@ -287,7 +266,7 @@ namespace Cinderbird.Embers
 
             Transform visualTransform = _visuals[slot].transform;
             // Centered on the surface point, so about half the dot pokes out of the ash.
-            visualTransform.localPosition = glimmer.SurfacePosition;
+            visualTransform.localPosition = _selection.ShownAt(slot);
             visualTransform.localScale = Vector3.one * (tier.VisualScale * _settings.SizeScale);
 
             _emissionColors[slot] = tier.EmissionColor * brightness;

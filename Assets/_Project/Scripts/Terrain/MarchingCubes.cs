@@ -20,6 +20,8 @@ namespace Cinderbird.Terrain
 
         // Results of the last batch, valid until ReleaseResults or the next batch.
         private readonly List<BatchItem> _batch = new List<BatchItem>();
+        private JobHandle _batchHandle;
+        private bool _batchRunning;
 
         private struct BatchItem
         {
@@ -94,6 +96,19 @@ namespace Cinderbird.Terrain
         /// </summary>
         public void PolygonizeChunks(VoxelWorld world, List<int> chunkIndices)
         {
+            ScheduleChunks(world, chunkIndices);
+            CompleteChunks();
+        }
+
+        /// <summary>Whether a batch started with <see cref="ScheduleChunks"/> has finished on the workers.</summary>
+        public bool IsBatchDone => !_batchRunning || _batchHandle.IsCompleted;
+
+        /// <summary>
+        /// Starts meshing several chunks in parallel on worker threads and returns at once. The jobs work on copies of
+        /// the samples, so the world may change meanwhile. Call <see cref="CompleteChunks"/> before reading the results.
+        /// </summary>
+        public void ScheduleChunks(VoxelWorld world, List<int> chunkIndices)
+        {
             ReleaseResults();
             if (chunkIndices.Count == 0)
             {
@@ -111,12 +126,28 @@ namespace Cinderbird.Terrain
                 handles[i] = CreateJob(item, cells, chunk.CellSize, chunk.Origin).Schedule();
             }
 
-            JobHandle.CompleteAll(handles);
+            _batchHandle = JobHandle.CombineDependencies(handles);
+            _batchRunning = true;
             handles.Dispose();
+            // Start the workers now rather than whenever Unity next flushes its job queue.
+            JobHandle.ScheduleBatchedJobs();
+        }
+
+        /// <summary>Waits for the batch started by <see cref="ScheduleChunks"/> (if any); then the results can be read.</summary>
+        public void CompleteChunks()
+        {
+            if (!_batchRunning)
+            {
+                return;
+            }
+
+            _batchHandle.Complete();
+            _batchRunning = false;
         }
 
         public void ReleaseResults()
         {
+            CompleteChunks();
             foreach (BatchItem item in _batch)
             {
                 Free(item);
@@ -241,8 +272,9 @@ namespace Cinderbird.Terrain
             return result;
         }
 
-        // A chunk's own samples come straight from its grid (fast); only the padding ring is read from the world,
-        // clamped at the world's edge.
+        // A chunk's own samples are copied straight from its grid a row at a time (a memory copy); only the padding
+        // ring is read sample by sample from the world, clamped at the world's edge. Runs on the main thread for every
+        // re-meshed chunk, so it has to be quick.
         private static NativeArray<float> PadChunk(VoxelWorld world, int chunkIndex, int3 cells)
         {
             VoxelGrid chunk = world.GetChunk(chunkIndex);
@@ -254,26 +286,29 @@ namespace Cinderbird.Terrain
             int3 padded = cells + 3;
             NativeArray<float> result = new NativeArray<float>(padded.x * padded.y * padded.z, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             float[] own = chunk.Densities;
+            int rowLength = cells.x + 1;
             int index = 0;
             for (int z = -1; z <= cells.z + 1; z++)
             {
                 bool zInside = z >= 0 && z <= cells.z;
+                int worldZ = Math.Clamp(z + offset.z, 0, maxZ);
                 for (int y = -1; y <= cells.y + 1; y++)
                 {
-                    bool yzInside = zInside && y >= 0 && y <= cells.y;
-                    for (int x = -1; x <= cells.x + 1; x++)
+                    int worldY = Math.Clamp(y + offset.y, 0, maxY);
+                    if (!zInside || y < 0 || y > cells.y)
                     {
-                        if (yzInside && x >= 0 && x <= cells.x)
+                        for (int x = -1; x <= cells.x + 1; x++)
                         {
-                            result[index++] = own[chunk.Index(x, y, z)];
-                            continue;
+                            result[index++] = world.GetDensity(Math.Clamp(x + offset.x, 0, maxX), worldY, worldZ);
                         }
 
-                        result[index++] = world.GetDensity(
-                            Math.Clamp(x + offset.x, 0, maxX),
-                            Math.Clamp(y + offset.y, 0, maxY),
-                            Math.Clamp(z + offset.z, 0, maxZ));
+                        continue;
                     }
+
+                    result[index++] = world.GetDensity(Math.Clamp(offset.x - 1, 0, maxX), worldY, worldZ);
+                    NativeArray<float>.Copy(own, chunk.Index(0, y, z), result, index, rowLength);
+                    index += rowLength;
+                    result[index++] = world.GetDensity(Math.Clamp(offset.x + cells.x + 1, 0, maxX), worldY, worldZ);
                 }
             }
 

@@ -441,7 +441,7 @@ namespace Cinderbird.Tests.EditMode
             float before = terrain.World.TotalAshVolume();
             int embersBefore = terrain.BuriedEmberCount;
             List<Ember> taken = new List<Ember>();
-            DigResult counted = terrain.StartDig(center, 0.5f, taken, null, 0.25f);
+            DigResult counted = terrain.StartDig(center, 0.5f, taken, null, null, 0f);
             Assert.That(counted.RemovedVolume, Is.GreaterThan(0.1f), "Setup: the scoop should take ash");
 
             AshSettler settler = new AshSettler(new SettleParameters(50f, 2f, 0.5f, 0.1f));
@@ -475,7 +475,7 @@ namespace Cinderbird.Tests.EditMode
             AshTerrain terrain = CreateMountain();
             Vector3 center = UnderSurface(terrain, 0.2f, 0.1f);
             float before = terrain.World.TotalAshVolume();
-            DigResult counted = terrain.StartDig(center, 0.5f, new List<Ember>(), null, 0f);
+            DigResult counted = terrain.StartDig(center, 0.5f, new List<Ember>(), null, null, 0f);
             AshSettler settler = new AshSettler(Parameters);
             settler.BeginScoop(terrain, center, 0.5f);
 
@@ -510,6 +510,83 @@ namespace Cinderbird.Tests.EditMode
             }
 
             Assert.That(Steps(0.05f), Is.GreaterThan(Steps(0f)));
+        }
+
+        [Test]
+        public void LooseEmber_OnAPitsRim_RidesTheSlide()
+        {
+            AshTerrain terrain = CreateMountain();
+            terrain.Locks.UnlockThrough(1);
+            Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+            DigPit(terrain, top, 0.6f, 6);
+            // On the steep wall just outside the pit, at the surface.
+            VoxelWorld world = terrain.World;
+            Vector2Int column = ColumnOf(world, top + new Vector3(0.7f, 0f, 0f));
+            float surface = world.Origin.y + (ColumnHeight(world, column.x, column.y)) * world.CellSize;
+            Vector3 onRim = new Vector3(world.SamplePosition(column.x, 0, column.y).x, surface, world.SamplePosition(column.x, 0, column.y).z);
+            int id = terrain.AddLoose(new Ember(onRim, 0, 0));
+            terrain.SetLooseRest(terrain.IndexOfLoose(id), 0f);
+            int count = terrain.BuriedEmberCount;
+
+            AshSettler settler = new AshSettler(Parameters);
+            settler.UseLooseEmbers(terrain.LooseEmbers);
+            settler.Begin(terrain, top, 0.6f);
+            settler.Finish();
+
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(count), "Still on the mountain");
+            int index = terrain.IndexOfLoose(id);
+            Assert.That(index, Is.GreaterThanOrEqualTo(0), "Still loose: found embers are never buried again");
+            Vector3 now = terrain.LooseEmbers[index].Ember.Position;
+            Assert.That(now.y, Is.LessThan(onRim.y), "It went down with the ash");
+            Assert.That(world.SampleDensity(now + Vector3.up * 0.01f), Is.LessThanOrEqualTo(0.05f), "And sits at the surface, not inside the ash");
+        }
+
+        [Test]
+        public void LooseEmber_AtTheBottomOfAPit_IsLiftedByAshSlidingIn_NotBuried()
+        {
+            AshTerrain terrain = CreateMountain();
+            terrain.Locks.UnlockThrough(1);
+            Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+            DigPit(terrain, top, 0.6f, 6);
+            VoxelWorld world = terrain.World;
+            Vector2Int column = ColumnOf(world, top);
+            float floor = world.Origin.y + ColumnHeight(world, column.x, column.y) * world.CellSize;
+            Vector3 sample = world.SamplePosition(column.x, 0, column.y);
+            Vector3 atBottom = new Vector3(sample.x, floor, sample.z);
+            int id = terrain.AddLoose(new Ember(atBottom, 0, 0));
+            terrain.SetLooseRest(terrain.IndexOfLoose(id), 0.05f);
+
+            AshSettler settler = new AshSettler(Parameters);
+            settler.UseLooseEmbers(terrain.LooseEmbers);
+            settler.Begin(terrain, top, 0.6f);
+            settler.Finish();
+
+            int index = terrain.IndexOfLoose(id);
+            Assert.That(index, Is.GreaterThanOrEqualTo(0), "Still loose");
+            Vector3 now = terrain.LooseEmbers[index].Ember.Position;
+            Assert.That(now.y, Is.GreaterThan(atBottom.y), "The walls slid in and lifted it");
+            Assert.That(world.SampleDensity(now), Is.LessThanOrEqualTo(0f), "Its center is above the ash, never inside it");
+        }
+
+        [Test]
+        public void LooseEmber_NotMeasuredYet_IsLeftForTheViewToPlace()
+        {
+            AshTerrain terrain = CreateMountain();
+            terrain.Locks.UnlockThrough(1);
+            Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+            DigPit(terrain, top, 0.6f, 6);
+            VoxelWorld world = terrain.World;
+            Vector2Int column = ColumnOf(world, top + new Vector3(0.7f, 0f, 0f));
+            float surface = world.Origin.y + ColumnHeight(world, column.x, column.y) * world.CellSize;
+            Vector3 onRim = new Vector3(world.SamplePosition(column.x, 0, column.y).x, surface, world.SamplePosition(column.x, 0, column.y).z);
+            int id = terrain.AddLoose(new Ember(onRim, 0, 0));
+
+            AshSettler settler = new AshSettler(Parameters);
+            settler.UseLooseEmbers(terrain.LooseEmbers);
+            settler.Begin(terrain, top, 0.6f);
+            settler.Finish();
+
+            Assert.That(terrain.LooseEmbers[terrain.IndexOfLoose(id)].Ember.Position, Is.EqualTo(onRim));
         }
     }
 }

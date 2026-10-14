@@ -192,5 +192,36 @@ namespace Cinderbird.Tests.EditMode
 
             Assert.That(_slot.TryLoad(out _, out _, out _), Is.False);
         }
+
+        [Test]
+        public void LooseEmbers_SurviveSaveAndLoad()
+        {
+            SaveFile file = CreateFile(3);
+            EmberRecord.Fill(file.Terrain.LooseEmbers, new List<Ember> { new Ember(new Vector3(1f, 2f, 3f), 2, 1) });
+
+            _slot.Write(file, null);
+            _slot.TryLoad(out SaveFile loaded, out _, out _);
+
+            List<Ember> loose = EmberRecord.ToEmbers(loaded.Terrain.LooseEmbers);
+            Assert.That(loose.Count, Is.EqualTo(1));
+            Assert.That(loose[0].Position, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+            Assert.That(loose[0].TierIndex, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Version1Save_StillLoads_WithNoLooseEmbers()
+        {
+            // A version 1 save has no loose-ember key at all.
+            string json = SaveSerializer.ToJson(CreateFile(5))
+                .Replace("\"_version\": 2", "\"_version\": 1")
+                .Replace("\"_looseEmbers\": []", "\"_unused\": []");
+
+            bool parsed = SaveSerializer.TryParse(json, out SaveFile file, out string error);
+
+            Assert.That(parsed, Is.True, error);
+            Assert.That(file.Version, Is.EqualTo(SaveFile.CurrentVersion));
+            Assert.That(file.Currencies.Glow, Is.EqualTo(5));
+            Assert.That(file.Terrain.LooseEmbers, Is.Empty);
+        }
     }
 }

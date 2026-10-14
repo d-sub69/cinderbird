@@ -125,7 +125,7 @@ namespace Cinderbird.Tests.EditMode
             Vector3 center = new Vector3(0f, 0.5f, 0f);
             float volumeBefore = terrain.World.TotalAshVolume();
 
-            DigResult started = terrain.StartDig(center, 0.8f, new List<Ember>(), null, 0f);
+            DigResult started = terrain.StartDig(center, 0.8f, new List<Ember>(), null, null, 0f);
             DigResult dug = reference.Dig(center, 0.8f, new List<Ember>());
 
             Assert.That(started.RemovedVolume, Is.EqualTo(dug.RemovedVolume).Within(1e-5f));
@@ -142,7 +142,7 @@ namespace Cinderbird.Tests.EditMode
             AshTerrain once = CreateTerrain();
             Vector3 center = new Vector3(0.3f, 0.6f, -0.2f);
 
-            staged.StartDig(center, 0.8f, new List<Ember>(), null, 0f);
+            staged.StartDig(center, 0.8f, new List<Ember>(), null, null, 0f);
             for (int stage = 1; stage <= 5; stage++)
             {
                 staged.CarveDig(center, 0.8f * Mathf.Pow(stage / 5f, 1f / 3f));
@@ -165,23 +165,154 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
-        public void CatchMargin_TakesEmbersJustBeyondTheHole()
+        public void GrazedEmber_BesideTheHole_ComesOutSideways_AndStillCounts()
         {
             AshTerrain terrain = CreateTerrain();
             Vector3 center = new Vector3(0f, 0.9f, 0f);
-            // 0.2 m below the bottom of a 0.4 m sphere: missed by the carve, within a 0.25 m catch margin.
-            Ember justBelow = new Ember(center + Vector3.down * 0.6f, 1);
-            terrain.PlaceEmber(justBelow);
-            List<Ember> withoutMargin = new List<Ember>();
-            List<Ember> withMargin = new List<Ember>();
+            // Level with the center, 0.15 m beyond a 0.4 m sphere: the scoop reached its side, within a 0.25 m margin.
+            Ember beside = new Ember(center + Vector3.right * 0.55f, 1);
+            terrain.PlaceEmber(beside);
+            int countBefore = terrain.BuriedEmberCount;
+            List<Ember> taken = new List<Ember>();
+            List<LooseEmber> exposed = new List<LooseEmber>();
 
-            AshTerrain other = CreateTerrain();
-            other.PlaceEmber(justBelow);
-            other.Dig(center, 0.4f, withoutMargin);
-            terrain.Dig(center, 0.4f, withMargin, null, 0.25f);
+            terrain.Dig(center, 0.4f, taken, null, exposed, 0.25f);
 
-            Assert.That(withoutMargin.Exists(e => e.Position == justBelow.Position), Is.False);
-            Assert.That(withMargin.Exists(e => e.Position == justBelow.Position), Is.True);
+            Assert.That(taken.Exists(e => e.Position == beside.Position), Is.False, "Not taken");
+            Vector3 expected = center + Vector3.right * 0.35f;
+            Assert.That(exposed.Exists(e => (e.Ember.Position - expected).magnitude < 1e-4f), Is.True, "Sideways into the hole, same height");
+            Assert.That(exposed.Exists(e => e.CameFrom == beside.Position), Is.True, "Knows where it lay, to be seen coming out");
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(countBefore - taken.Count), "Exposed embers still count as on the mountain");
+        }
+
+        [Test]
+        public void GrazedEmber_UnderTheHolesFloor_StaysBuried()
+        {
+            AshTerrain terrain = CreateTerrain();
+            Vector3 center = new Vector3(0f, 0.9f, 0f);
+            // 0.2 m below the bottom of the sphere: no open space at its height, so it stays put, thinly covered.
+            Ember below = new Ember(center + Vector3.down * 0.6f, 1);
+            terrain.PlaceEmber(below);
+            List<LooseEmber> exposed = new List<LooseEmber>();
+
+            terrain.Dig(center, 0.4f, new List<Ember>(), null, exposed, 0.25f);
+
+            Assert.That(exposed.Exists(e => e.CameFrom == below.Position), Is.False);
+            List<Ember> buried = new List<Ember>();
+            terrain.CopyAllEmbers(buried);
+            Assert.That(buried.Exists(e => e.Position == below.Position), Is.True);
+        }
+
+        [Test]
+        public void ExposedSpot_NeverMovesUp()
+        {
+            Vector3 center = new Vector3(0f, 2f, 0f);
+            for (float y = 1.7f; y <= 2.3f; y += 0.05f)
+            {
+                Vector3 ember = new Vector3(0.5f, y, 0.2f);
+                if (AshTerrain.TryExposedSpot(center, 0.4f, ember, out Vector3 spot))
+                {
+                    Assert.That(spot.y, Is.EqualTo(ember.y), $"Ember at height {y}");
+                    Assert.That(new Vector2(spot.x, spot.z).magnitude, Is.LessThan(new Vector2(ember.x, ember.z).magnitude));
+                }
+            }
+        }
+
+        [Test]
+        public void LooseEmbers_CountUntilCollected()
+        {
+            AshTerrain terrain = CreateTerrain();
+            int count = terrain.BuriedEmberCount;
+            Ember ember = new Ember(new Vector3(0.3f, 1.2f, 0.2f), 0, 0);
+
+            int id = terrain.AddDroppedLoose(ember);
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(count + 1));
+            Assert.That(terrain.LooseEmbers.Count, Is.EqualTo(1));
+
+            int index = terrain.IndexOfLoose(id);
+            terrain.MoveLoose(index, new Vector3(0.3f, 1.0f, 0.2f));
+            terrain.SetLooseRest(index, 0.05f);
+            Assert.That(terrain.LooseEmbers[index].Rest, Is.EqualTo(0.05f));
+            Assert.That(terrain.LooseEmbers[index].Ember.Position, Is.EqualTo(new Vector3(0.3f, 1.0f, 0.2f)));
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(count + 1), "Moving it doesn't change the count");
+
+            Ember collected = terrain.TakeLoose(index);
+            Assert.That(collected.Position, Is.EqualTo(new Vector3(0.3f, 1.0f, 0.2f)));
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(count), "Collecting counts it as taken");
+        }
+
+        [Test]
+        public void Dig_TakesLooseEmbersInsideIt()
+        {
+            AshTerrain terrain = CreateTerrain();
+            Vector3 center = new Vector3(0f, 1f, 0f);
+            terrain.AddLoose(new Ember(center + Vector3.up * 0.1f, 2, 0));
+            List<Ember> taken = new List<Ember>();
+
+            terrain.Dig(center, 0.4f, taken);
+
+            Assert.That(terrain.LooseEmbers, Is.Empty);
+            Assert.That(taken.Exists(e => e.TierIndex == 2), Is.True);
+        }
+
+        [Test]
+        public void ReplaceLoose_RestoresThemAndTheCounts()
+        {
+            AshTerrain terrain = CreateTerrain();
+            int count = terrain.BuriedEmberCount;
+
+            terrain.ReplaceLoose(new[] { new Ember(Vector3.up, 0), new Ember(Vector3.one, 1) });
+
+            Assert.That(terrain.LooseEmbers.Count, Is.EqualTo(2));
+            Assert.That(terrain.BuriedEmberCount, Is.EqualTo(count + 2));
+        }
+
+        [Test]
+        public void LooseRules_FindTheSurfaceAboveOrBelowAnEmber()
+        {
+            AshTerrain terrain = CreateTerrain();
+            VoxelWorld world = terrain.World;
+            const float radius = 0.1f;
+            float surface = SurfaceAtCenter(world);
+
+            Assert.That(LooseEmberRules.TryFindSurface(world, new Vector3(0f, surface - 0.3f, 0f), radius, 3f, out float fromInside), Is.True, "Covered");
+            Assert.That(fromInside, Is.EqualTo(surface).Within(0.02f));
+            Assert.That(LooseEmberRules.TryFindSurface(world, new Vector3(0f, surface + radius, 0f), radius, 3f, out float fromAbove), Is.True, "Lying on top");
+            Assert.That(fromAbove, Is.EqualTo(surface).Within(0.02f));
+            Assert.That(LooseEmberRules.TryFindSurface(world, new Vector3(0f, surface + 1f, 0f), radius, 3f, out _), Is.False, "In the air: it should fall");
+            Assert.That(LooseEmberRules.RestsOnAsh(world, new Vector3(0f, 3f, 0f), radius), Is.False);
+            Assert.That(LooseEmberRules.RestsOnAsh(world, new Vector3(0f, surface + radius, 0f), radius), Is.True);
+        }
+
+        [Test]
+        public void LooseRules_AshPiledOverAnEmber_LiftsItBackToItsRest()
+        {
+            AshTerrain terrain = CreateTerrain();
+            VoxelWorld world = terrain.World;
+            const float radius = 0.1f;
+            float surface = SurfaceAtCenter(world);
+            Vector3 covered = new Vector3(0f, surface - 0.4f, 0f);
+
+            Assert.That(LooseEmberRules.TryFindSurface(world, covered, radius, 3f, out float found), Is.True);
+            float y = LooseEmberRules.Settle(covered.y, found, radius, radius, out float rest);
+
+            Assert.That(y, Is.EqualTo(surface + radius).Within(0.02f), "Back on top, not buried");
+            Assert.That(rest, Is.EqualTo(radius));
+        }
+
+        // The top of the test mound straight above its middle.
+        private static float SurfaceAtCenter(VoxelWorld world)
+        {
+            float surface = 0f;
+            for (float y = 0f; y < 3f; y += 0.005f)
+            {
+                if (world.SampleDensity(new Vector3(0f, y, 0f)) > 0f)
+                {
+                    surface = y;
+                }
+            }
+
+            return surface;
         }
     }
 }

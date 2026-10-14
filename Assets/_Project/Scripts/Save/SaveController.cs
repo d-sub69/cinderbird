@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using Cinderbird.Core;
@@ -19,8 +18,8 @@ namespace Cinderbird.Save
 {
     /// <summary>
     /// Thin adapter between the game and its <see cref="SaveSlot"/>: loads the save when the bootstrap says so, autosaves on a
-    /// timer, after feeding the nest and on quit, and handles the debug keys (F5 save, F9 reload the save,
-    /// F8 delete it and start fresh). Saving copies the game state on the main thread (quick) and packs and
+    /// timer, after feeding the nest and on quit, and handles the debug keys where <see cref="DevTools"/> are on (F5
+    /// save, F9 reload the save, F8 delete it and start fresh). Saving copies the game state on the main thread (quick) and packs and
     /// writes it on a background thread, so autosaves don't stall a frame.
     /// </summary>
     public sealed class SaveController : MonoBehaviour
@@ -30,6 +29,9 @@ namespace Cinderbird.Save
         // F9 reloads the scene to load the save; this makes that one start load it even when the Editor
         // setting says to start fresh. Static because the reload replaces this object.
         private static bool _loadOnNextStart;
+
+        // Editor only: a folder PlayMode tests point saves at, so they never read or overwrite the real save.
+        private static string _testFolder;
 
         [SerializeField] private SaveSettings _settings;
         [SerializeField] private VoxelTerrain _pile;
@@ -50,10 +52,8 @@ namespace Cinderbird.Save
         [SerializeField] private InputActionReference _loadAction;
         [SerializeField] private InputActionReference _resetAction;
 
-        private readonly List<ToolDefinition> _slotBuffer = new List<ToolDefinition>();
-        private readonly List<ToolDefinition> _placedBuffer = new List<ToolDefinition>();
         private SaveSlot _slot;
-        private TerrainSnapshot _terrainSnapshot;
+        private SaveStateMapper _state;
         private Task _writeTask;
         private float _nextAutosaveTime;
         private bool _saveRequested;
@@ -78,7 +78,19 @@ namespace Cinderbird.Save
         private static void ResetStatics()
         {
             _loadOnNextStart = false;
+            _testFolder = null;
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Editor only, for PlayMode tests: save controllers created from now on (this Play session) use this folder
+        /// instead of the player's save folder; null goes back to normal. Reset whenever Play mode starts.
+        /// </summary>
+        public static void RedirectSavesForTests(string folder)
+        {
+            _testFolder = folder;
+        }
+#endif
 
         /// <summary>Asks for a save at the next opportunity (right away unless one is still being written).</summary>
         public void RequestSave()
@@ -96,8 +108,9 @@ namespace Cinderbird.Save
                 return;
             }
 
-            string folder = Path.Combine(Application.persistentDataPath, _settings.FolderName);
+            string folder = _testFolder ?? Path.Combine(Application.persistentDataPath, _settings.FolderName);
             _slot = new SaveSlot(new SaveFileStore(folder, _settings.FileName));
+            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools);
         }
 
         private void OnEnable()
@@ -107,9 +120,13 @@ namespace Cinderbird.Save
                 return;
             }
 
-            EnableAction(_saveAction);
-            EnableAction(_loadAction);
-            EnableAction(_resetAction);
+            if (DevTools.Enabled)
+            {
+                EnableAction(_saveAction);
+                EnableAction(_loadAction);
+                EnableAction(_resetAction);
+            }
+
             _nest.Fed += OnFed;
         }
 
@@ -131,7 +148,10 @@ namespace Cinderbird.Save
                 return;
             }
 
-            HandleDebugKeys();
+            if (DevTools.Enabled)
+            {
+                HandleDebugKeys();
+            }
 
             // Nothing changes while paused; a save that falls due then happens on resume.
             if (_pause != null && _pause.IsPaused)
@@ -301,101 +321,21 @@ namespace Cinderbird.Save
 
         private void Apply(SaveFile file, TerrainSnapshot terrain)
         {
-            AshTerrain ash = _pile.Terrain;
-            bool sameMountain = ash != null && file.Terrain.Fingerprint == _pile.Fingerprint &&
-                                (terrain == null || terrain.FitsWorld(ash.World));
-            if (ash != null)
+            bool sameMountain = _state.Apply(file, terrain, out int lostBasketEmbers);
+            if (lostBasketEmbers > 0)
             {
-                ash.Locks.UnlockThrough(file.Terrain.DeepestUnlockedLayer);
-                if (sameMountain && terrain != null)
-                {
-                    terrain.ApplyTo(ash);
-                }
-
-                _pile.CommitRestore();
+                Debug.LogWarning($"{lostBasketEmbers} saved embers didn't fit in the basket and were lost.", this);
             }
 
-            _wallet.Currencies.Restore(Math.Max(0, file.Currencies.Glow), Math.Max(0, file.Currencies.Heat));
-            RestoreSieve(file.Sieve);
-            int dropped = _basket.Contents.Restore(EmberRecord.ToEmbers(file.Basket.Embers));
-            if (dropped > 0)
-            {
-                Debug.LogWarning($"{dropped} saved embers didn't fit in the basket and were lost.", this);
-            }
-
-            // On a regenerated mountain the saved spots may be inside the ash: placed tools come back to the
-            // hands and the player starts at the default spot.
-            RestoreTools(file.Tools, sameMountain);
             if (sameMountain)
             {
-                _player.RestorePose(file.Player.Pose);
                 Notice?.Invoke("Save loaded");
-            }
-            else
-            {
-                const string message = "The mountain's settings changed since this save, so it was regenerated. Glow, Heat, open layers and tools were kept.";
-                Debug.LogWarning(message, this);
-                Notice?.Invoke(message);
-            }
-        }
-
-        private void RestoreSieve(SieveSave saved)
-        {
-            _sieve.Contents.Restore(Mathf.Max(0f, saved.AshVolume), saved.LoadVolume, saved.AshColor, saved.DustColor,
-                EmberRecord.ToEmbers(saved.Embers));
-        }
-
-        private void RestoreTools(ToolsSave saved, bool restorePlaced)
-        {
-            _placedBuffer.Clear();
-            if (restorePlaced)
-            {
-                foreach (PlacedToolSave placed in saved.Placed)
-                {
-                    PlaceableTool tool = FindPlaceable(placed.ToolId);
-                    if (tool != null && !_placedBuffer.Contains(tool.Tool))
-                    {
-                        _placedBuffer.Add(tool.Tool);
-                    }
-                }
-            }
-
-            _slotBuffer.Clear();
-            foreach (string id in saved.Slots)
-            {
-                ToolDefinition tool = _toolBelt.FindTool(id);
-                // A tool can't be both in a slot and out in the world.
-                _slotBuffer.Add(tool != null && !_placedBuffer.Contains(tool) ? tool : null);
-            }
-
-            _toolBelt.RestoreSlots(_slotBuffer, saved.ActiveSlot, _placedBuffer);
-
-            if (!restorePlaced)
-            {
                 return;
             }
 
-            foreach (PlacedToolSave placed in saved.Placed)
-            {
-                PlaceableTool tool = FindPlaceable(placed.ToolId);
-                if (tool != null && !tool.IsPlaced)
-                {
-                    tool.PlaceAt(placed.Position - Vector3.up * tool.PlacedHeightOffset, placed.Rotation);
-                }
-            }
-        }
-
-        private PlaceableTool FindPlaceable(string toolId)
-        {
-            foreach (PlaceableTool tool in _placeableTools)
-            {
-                if (tool != null && ToolBelt.IdOf(tool.Tool) == toolId)
-                {
-                    return tool;
-                }
-            }
-
-            return null;
+            const string message = "The mountain's settings changed since this save, so it was regenerated. Glow, Heat, open layers and tools were kept.";
+            Debug.LogWarning(message, this);
+            Notice?.Invoke(message);
         }
 
         // Starts a background write of the current state; false if the previous one is still running.
@@ -479,85 +419,15 @@ namespace Cinderbird.Save
 
         private SaveFile Capture(out TerrainSnapshot terrain)
         {
-            // A hole still opening counts as open: its ash is already in the sieve.
-            _pile.FinishCarveNow();
-            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            // A hole still opening counts as open: its ash is already in the sieve. Not timed: it is the scoop's work.
+            _pile.CompleteScoopNow();
+            long started = TimeMeasure.Now();
             using (CaptureMarker.Auto())
             {
-                SaveFile file = new SaveFile
-                {
-                    SavedAtUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
-                };
-
-                AshTerrain ash = _pile.Terrain;
-                terrain = null;
-                if (ash != null)
-                {
-                    // Kept between saves, so only chunks changed since the last one are copied. Safe to update here:
-                    // a capture only happens while no background write (which reads the snapshot) is running.
-                    _terrainSnapshot ??= new TerrainSnapshot(ash.World.GetChunk(0).Densities.Length, ash.World.ChunkCount);
-                    _terrainSnapshot.Update(ash);
-                    terrain = _terrainSnapshot;
-                }
-                file.Terrain.Fingerprint = _pile.Fingerprint ?? string.Empty;
-                file.Terrain.DeepestUnlockedLayer = _pile.DeepestUnlockedLayer;
-
-                file.Currencies.Glow = _wallet.Currencies.Glow;
-                file.Currencies.Heat = _wallet.Currencies.Heat;
-                file.Player.Pose = _player.Pose;
-                CaptureTools(file.Tools);
-                CaptureSieve(file.Sieve);
-                EmberRecord.Fill(file.Basket.Embers, _basket.Contents.Embers);
-                LastCaptureMilliseconds = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 /
-                                                  System.Diagnostics.Stopwatch.Frequency);
+                SaveFile file = _state.Capture(out terrain);
+                LastCaptureMilliseconds = TimeMeasure.MillisecondsSince(started);
                 return file;
             }
-        }
-
-        private void CaptureTools(ToolsSave save)
-        {
-            Inventory<ToolDefinition> inventory = _toolBelt.Inventory;
-            for (int i = 0; i < inventory.Capacity; i++)
-            {
-                save.Slots.Add(ToolBelt.IdOf(inventory[i]));
-            }
-
-            save.ActiveSlot = inventory.ActiveSlot;
-            foreach (PlaceableTool tool in _placeableTools)
-            {
-                if (tool != null && tool.IsPlaced)
-                {
-                    Transform pose = tool.transform;
-                    save.Placed.Add(new PlacedToolSave(ToolBelt.IdOf(tool.Tool), pose.position, pose.rotation));
-                }
-            }
-        }
-
-        private void CaptureSieve(SieveSave save)
-        {
-            SieveContents contents = _sieve.Contents;
-            EmberRecord.Fill(save.Embers, contents.Embers);
-            if (!_sieveFiller.IsFilling)
-            {
-                save.AshVolume = contents.AshVolume;
-                save.LoadVolume = contents.LoadVolume;
-                save.AshColor = contents.AshColor;
-                save.DustColor = contents.DustColor;
-                return;
-            }
-
-            // A load still pouring in already left the mountain, so it counts as in the sieve. Pours only start
-            // into an ash-free sieve, so it is the whole load.
-            IReadOnlyList<Ember> incoming = _sieveFiller.IncomingEmbers;
-            for (int i = 0; i < incoming.Count; i++)
-            {
-                save.Embers.Add(new EmberRecord(incoming[i]));
-            }
-
-            save.AshVolume = contents.AshVolume + _sieveFiller.IncomingVolume;
-            save.LoadVolume = save.AshVolume;
-            save.AshColor = _sieveFiller.IncomingAshColor;
-            save.DustColor = _sieveFiller.IncomingDustColor;
         }
 
         private static void EnableAction(InputActionReference action)

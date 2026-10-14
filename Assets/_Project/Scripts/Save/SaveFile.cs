@@ -10,7 +10,8 @@ namespace Cinderbird.Save
     [Serializable]
     public sealed class SaveFile
     {
-        public const int CurrentVersion = 1;
+        // 2: loose embers in the terrain save.
+        public const int CurrentVersion = 2;
 
         // Field names are the JSON keys: renaming one breaks older saves unless the migrator handles it.
         [SerializeField] private int _version = CurrentVersion;

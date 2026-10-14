@@ -23,6 +23,9 @@ namespace Cinderbird.Terrain
         [SerializeField, Range(1, 200)] private int _stepsPerUpdate = 4;
         [Tooltip("Dust particles per spot where ash runs, each update.")]
         [SerializeField, Range(0, 10)] private int _dustPerSpot = 2;
+        [Tooltip("A column must lose at least this much ash (in samples' worth) between updates to puff dust; higher " +
+                 "keeps dust to where ash really runs.")]
+        [SerializeField, Min(0f)] private float _minSlideForDust = 0.15f;
 
         public float UpdatesPerSecond => _updatesPerSecond;
         public int StepsPerUpdate => _stepsPerUpdate;
@@ -30,7 +33,7 @@ namespace Cinderbird.Terrain
 
         public SettleParameters ToParameters()
         {
-            return new SettleParameters(_reposeAngle, _reach, _flowRate, _maxFlowPerStep);
+            return new SettleParameters(_reposeAngle, _reach, _flowRate, _maxFlowPerStep, _minSlideForDust);
         }
     }
 }

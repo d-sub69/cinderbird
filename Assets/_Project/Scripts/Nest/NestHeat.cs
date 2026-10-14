@@ -8,7 +8,7 @@ namespace Cinderbird.Nest
     /// <summary>
     /// Thin adapter for the nest's Heat levels and what they open: works out the level from the Heat earned,
     /// announces new levels, and melts the next ash layer open as soon as <see cref="LayerUnlockRule"/> allows
-    /// (checked whenever Heat changes or a dig takes embers out of the pile).
+    /// (checked whenever Heat changes or embers leave the pile).
     /// </summary>
     public sealed class NestHeat : MonoBehaviour
     {
@@ -81,6 +81,7 @@ namespace Cinderbird.Nest
             _wallet.Currencies.Restored += OnRestored;
             _pile.Dug += OnDug;
             _pile.Restored += OnRestored;
+            _pile.EmbersCollected += TryOpenLayers;
             OnRestored();
         }
 
@@ -95,6 +96,7 @@ namespace Cinderbird.Nest
             _wallet.Currencies.Restored -= OnRestored;
             _pile.Dug -= OnDug;
             _pile.Restored -= OnRestored;
+            _pile.EmbersCollected -= TryOpenLayers;
         }
 
         private void OnHeatChanged()
