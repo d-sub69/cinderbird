@@ -25,11 +25,28 @@ namespace Cinderbird.Sifting
 
         public event Action Changed;
 
-        public int Capacity { get; }
+        public int Capacity { get; private set; }
+
+        /// <summary>A bigger (or smaller) basket; embers already in it stay, even above a smaller capacity.</summary>
+        public void SetCapacity(int capacity)
+        {
+            if (capacity < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(capacity), "Basket must hold at least one ember.");
+            }
+
+            if (capacity == Capacity)
+            {
+                return;
+            }
+
+            Capacity = capacity;
+            Changed?.Invoke();
+        }
 
         public IReadOnlyList<Ember> Embers => _embers;
 
-        public int FreeSpace => Capacity - _embers.Count;
+        public int FreeSpace => Math.Max(0, Capacity - _embers.Count);
 
         public bool IsFull => FreeSpace == 0;
 

@@ -137,5 +137,35 @@ namespace Cinderbird.Tests.EditMode
             Assert.That(dropped, Is.EqualTo(2));
             Assert.That(basket.IsFull, Is.True);
         }
+
+        [Test]
+        public void SetCapacity_ABiggerBasket_HasRoomForMore()
+        {
+            BasketContents basket = new BasketContents(3);
+            basket.Restore(Embers(3));
+            Assert.That(basket.IsFull, Is.True);
+            int changes = 0;
+            basket.Changed += () => changes++;
+
+            basket.SetCapacity(5);
+
+            Assert.That(basket.Capacity, Is.EqualTo(5));
+            Assert.That(basket.FreeSpace, Is.EqualTo(2));
+            Assert.That(basket.IsFull, Is.False);
+            Assert.That(changes, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SetCapacity_BelowWhatItHolds_KeepsTheEmbers_AndIsFull()
+        {
+            BasketContents basket = new BasketContents(5);
+            basket.Restore(Embers(4));
+
+            basket.SetCapacity(2);
+
+            Assert.That(basket.EmberCount, Is.EqualTo(4));
+            Assert.That(basket.FreeSpace, Is.Zero);
+            Assert.That(basket.IsFull, Is.True);
+        }
     }
 }

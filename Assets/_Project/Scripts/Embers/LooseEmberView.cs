@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cinderbird.Terrain;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Cinderbird.Embers
@@ -14,6 +15,7 @@ namespace Cinderbird.Embers
     {
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        private static readonly ProfilerMarker UpdateMarker = new ProfilerMarker("Cinderbird.LooseEmbers");
 
         // How far up through ash that came over it an ember is looked for its surface; ash this deep in one go is rare
         // (sliding ash lifts it as it comes).
@@ -157,15 +159,18 @@ namespace Cinderbird.Embers
                 return;
             }
 
-            if (_checkPending || Time.time >= _nextCheckTime)
+            using (UpdateMarker.Auto())
             {
-                _checkPending = false;
-                _nextCheckTime = Time.time + _settings.CheckInterval;
-                CheckAgainstAsh(terrain);
-            }
+                if (_checkPending || Time.time >= _nextCheckTime)
+                {
+                    _checkPending = false;
+                    _nextCheckTime = Time.time + _settings.CheckInterval;
+                    CheckAgainstAsh(terrain);
+                }
 
-            AdvanceFalls(terrain, Time.deltaTime);
-            SyncVisuals(terrain);
+                AdvanceFalls(terrain, Time.deltaTime);
+                SyncVisuals(terrain);
+            }
         }
 
         // Keeps every loose ember at its rest above the ash (lifted by ash that came over it, let down where ash ran away)

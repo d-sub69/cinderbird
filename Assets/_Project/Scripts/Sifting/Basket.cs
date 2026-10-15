@@ -28,6 +28,12 @@ namespace Cinderbird.Sifting
         /// <summary>
         /// Created on first access rather than in Awake: other objects' OnEnable can run before our Awake.
         /// </summary>
+        /// <summary>The capacity of the basket (an upgrade sets it).</summary>
+        public void SetCapacity(int capacity)
+        {
+            Contents.SetCapacity(capacity);
+        }
+
         public BasketContents Contents
         {
             get

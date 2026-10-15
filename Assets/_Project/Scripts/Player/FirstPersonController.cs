@@ -214,7 +214,8 @@ namespace Cinderbird.Player
 
             _motor.SetStance(IsHeld(_sprintAction), _crouch.IsCrouching);
 
-            Vector2 moveInput = _moveAction.action.ReadValue<Vector2>();
+            // With the cursor free (a menu is open) the keys belong to the menu; gravity still applies.
+            Vector2 moveInput = Cursor.lockState == CursorLockMode.Locked ? _moveAction.action.ReadValue<Vector2>() : Vector2.zero;
             Vector3 direction = transform.right * moveInput.x + transform.forward * moveInput.y;
 
             float deltaTime = Time.deltaTime;

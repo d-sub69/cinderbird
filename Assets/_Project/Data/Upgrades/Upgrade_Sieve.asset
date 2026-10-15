@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 108af1e416240be40b0e57395b61d176, type: 3}
+  m_Name: Upgrade_Sieve
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Economy.SieveUpgrade
+  _id: sieve
+  _displayName: Sieve
+  _baseCost: 120
+  _costGrowth: 5
+  _tiers:
+  - _name: Hand sieve
+    _scoopRadius: 0.4
+    _emberCapacity: 16
+    _visualScale: 1
+  - _name: Wooden sieve
+    _scoopRadius: 0.55
+    _emberCapacity: 24
+    _visualScale: 1.2
+  - _name: Wide sieve
+    _scoopRadius: 0.7
+    _emberCapacity: 32
+    _visualScale: 1.4

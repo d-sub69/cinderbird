@@ -37,6 +37,30 @@ namespace Cinderbird.Economy
             Changed?.Invoke();
         }
 
+        /// <summary>Spends Glow if there is enough; Heat is never spent.</summary>
+        /// <returns>False (and nothing changes) when there isn't enough Glow.</returns>
+        public bool TrySpend(int glow)
+        {
+            if (glow < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(glow), "A price cannot be negative.");
+            }
+
+            if (glow > Glow)
+            {
+                return false;
+            }
+
+            if (glow == 0)
+            {
+                return true;
+            }
+
+            Glow -= glow;
+            Changed?.Invoke();
+            return true;
+        }
+
         /// <summary>Sets both counters to saved values.</summary>
         public void Restore(int glow, int heat)
         {

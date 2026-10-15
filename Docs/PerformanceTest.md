@@ -14,7 +14,7 @@ Staying inside it there should keep the minimum spec (GTX 1050, i5-6500, 8 GB RA
 | GPU (avg and p95) | ≤ 4 ms | GPU time per frame |
 | GC | 0 B/frame | Managed garbage per frame in normal play (worst frame of each refresh) |
 | Dig | ≤ 4 ms | One scoop on the main thread: taking its ash and embers (the hole then drains open in settling updates) |
-| Settle | ≤ 4 ms | One settling update on the main thread: writing the sliding ash and starting its re-mesh (`settle_max`), plus uploading the new meshes a frame later (`upload_max`). Each must stay under the budget, and leave room in the 6 ms CPU budget |
+| Settle | ≤ 4 ms | One settling update on the main thread: writing the sliding ash and starting its re-mesh (`settle_max`), plus uploading the new meshes a frame later (`upload_max`) and copying shapes for the background collider bake (`collider_max`). Each must stay under the budget, and leave room in the 6 ms CPU budget |
 | Save | ≤ 2 ms | Main-thread part of an autosave |
 | Start | ≤ 3 s | Scene start to player control (build mountain + load save) |
 
@@ -57,8 +57,12 @@ covering those 5 seconds:
 [Perf] t=35s Medium vsync=off 1920x1080 | fps=142 frame=7.0 p95=8.3 worst=15.2 | cpu=4.1 p95=5.0 | gpu=3.2 p95=3.6 | gc_worst=0B gc_frames=0 | digs=3 dig_max=2.8ms mesh_max=2.5ms chunks_max=1 after_dig_max=0.4ms | saves=0 save_max=0.0ms | start=2.14s
 ```
 
-Logs:
-- Build: `%USERPROFILE%\AppData\LocalLow\DefaultCompany\Cinderbird\Player.log` (overwritten at each start, so
+The same lines also go to `perf.log` next to the save (`%USERPROFILE%\AppData\LocalLow\AshQueueD\Cinderbird\perf.log`, new at each
+launch), together with a `[hitch]` line for every frame slower than 40 ms, saying which of the game's systems took the time
+(dig, mesh, colliders, settle, settle_wait, glimmers, loose, save, gc); time not listed there is unity itself.
+
+logs:
+- Build: `%USERPROFILE%\AppData\LocalLow\AshQueueD\Cinderbird\Player.log` (overwritten at each start, so
   read it before starting the game again; the previous run is kept as `Player-prev.log`).
 - Editor: the Console, and `%LOCALAPPDATA%\Unity\Editor\Editor.log`.
 

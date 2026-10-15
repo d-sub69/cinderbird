@@ -82,6 +82,9 @@ namespace Cinderbird.Terrain
 
         public bool IsBuilt => _terrain != null;
 
+        /// <summary>Whether ash is moving right now (a scoop draining or a slide running).</summary>
+        public bool IsSettling => _settling != null && _settling.IsSettling;
+
         /// <summary>The deepest ash layer that can be dug right now.</summary>
         public int DeepestUnlockedLayer => _terrain?.Locks.DeepestUnlocked ?? 0;
 
@@ -107,6 +110,12 @@ namespace Cinderbird.Terrain
 
         /// <summary>Counts those uploads, so the performance overlay can tell a new one happened.</summary>
         public int UploadCount => _meshes?.UploadCount ?? 0;
+
+        /// <summary>Main-thread milliseconds of the last collider round (copying shapes and starting their background bake).</summary>
+        public float LastColliderMilliseconds => _meshes?.LastColliderMilliseconds ?? 0f;
+
+        /// <summary>Counts collider rounds, so the performance overlay can tell a new one happened.</summary>
+        public int ColliderRoundCount => _meshes?.ColliderRoundCount ?? 0;
 
         /// <summary>Milliseconds the listeners of the last dig took (glimmers, scoop effects, HUD), on top of the dig itself.</summary>
         public float LastDugListenersMilliseconds { get; private set; }
@@ -275,6 +284,22 @@ namespace Cinderbird.Terrain
             ember = _terrain.TakeLoose(index);
             EmbersCollected?.Invoke();
             return true;
+        }
+
+        /// <summary>
+        /// Puts an ember that left the mountain back into the world, lying loose (e.g. one that slipped through the
+        /// sieve's mesh); it counts as on the mountain again until collected.
+        /// </summary>
+        public void DropLoose(Ember ember, Vector3 worldPosition)
+        {
+            if (_terrain == null)
+            {
+                return;
+            }
+
+            Vector3 local = transform.InverseTransformPoint(worldPosition);
+            _terrain.AddDroppedLoose(new Ember(local, ember.TierIndex, ember.Layer));
+            LooseEmbersChanged?.Invoke();
         }
 
         // Embers the dig only grazed lie loose once its hole is open: earlier, the walls still draining in would

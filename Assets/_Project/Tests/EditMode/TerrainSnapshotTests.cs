@@ -39,6 +39,36 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void WarmUp_CopiesChunksOnceTheyStopChanging_SoTheSaveCopiesNothing()
+        {
+            AshTerrain terrain = CreateTerrain();
+            DigAtSeam(terrain);
+            TerrainSnapshot snapshot = new TerrainSnapshot(terrain.World.GetChunk(0).Densities.Length, terrain.World.ChunkCount);
+
+            Assert.That(snapshot.WarmUp(terrain, 10, 2), Is.Zero, "first look: just remembers the versions");
+            Assert.That(snapshot.WarmUp(terrain, 10, 2), Is.Zero, "unchanged once: not yet");
+            int copied = snapshot.WarmUp(terrain, 10, 2);
+            snapshot.Update(terrain);
+
+            Assert.That(copied, Is.GreaterThan(0));
+            Assert.That(snapshot.LastCopiedChunkCount, Is.Zero, "the save had nothing left to copy");
+            Assert.That(snapshot.WarmUp(terrain, 10, 2), Is.Zero, "already copied");
+        }
+
+        [Test]
+        public void WarmUp_SkipsChunksStillChanging_AndCopiesAtMostTheLimit()
+        {
+            AshTerrain terrain = CreateTerrain();
+            DigAtSeam(terrain);
+            TerrainSnapshot snapshot = new TerrainSnapshot(terrain.World.GetChunk(0).Densities.Length, terrain.World.ChunkCount);
+            snapshot.WarmUp(terrain, 10, 1);
+
+            terrain.Dig(new Vector3(0f, 1.2f, -0.3f), 0.9f, new List<Ember>());
+            Assert.That(snapshot.WarmUp(terrain, 10, 1), Is.Zero, "they just changed again");
+            Assert.That(snapshot.WarmUp(terrain, 1, 1), Is.EqualTo(1));
+        }
+
+        [Test]
         public void Capture_FreshMountain_HasNoChunks()
         {
             TerrainSnapshot snapshot = TerrainSnapshot.Capture(CreateTerrain());

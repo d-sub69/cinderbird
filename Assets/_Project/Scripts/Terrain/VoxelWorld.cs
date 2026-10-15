@@ -14,6 +14,8 @@ namespace Cinderbird.Terrain
     {
         private readonly VoxelGrid[] _chunks;
         private readonly bool[] _dirty;
+        // Where a capped take of dirty chunks starts, so chunks that keep changing can't starve the others.
+        private int _dirtyCursor;
         // Separate from _dirty: re-meshing clears dirty flags after every dig, but a save needs every chunk
         // changed since the mountain was generated.
         private readonly bool[] _modified;
@@ -333,6 +335,47 @@ namespace Cinderbird.Terrain
                     output.Add(i);
                     _dirty[i] = false;
                 }
+            }
+        }
+
+        /// <summary>Whether any chunk changed since it was last taken for re-meshing.</summary>
+        public bool HasDirtyChunks
+        {
+            get
+            {
+                for (int i = 0; i < _dirty.Length; i++)
+                {
+                    if (_dirty[i])
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Like <see cref="TakeDirtyChunks(List{int})"/>, but takes at most <paramref name="maxCount"/>, going round the world so
+        /// every changed chunk gets its turn; the rest stay dirty for the next call.
+        /// </summary>
+        public void TakeDirtyChunks(List<int> output, int maxCount)
+        {
+            output.Clear();
+            int count = _dirty.Length;
+            for (int step = 0; step < count && output.Count < maxCount; step++)
+            {
+                int i = (_dirtyCursor + step) % count;
+                if (_dirty[i])
+                {
+                    output.Add(i);
+                    _dirty[i] = false;
+                }
+            }
+
+            if (output.Count > 0)
+            {
+                _dirtyCursor = (output[output.Count - 1] + 1) % count;
             }
         }
 

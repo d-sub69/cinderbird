@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef5f3aa9146b758498ed00bdf77f78c7, type: 3}
+  m_Name: Upgrade_Mesh
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Economy.MeshUpgrade
+  _id: mesh
+  _displayName: Mesh
+  _baseCost: 30
+  _costGrowth: 1.15
+  _levels:
+  - _name: Coarse mesh
+    _slipChance: 0.3
+  - _name: Fine mesh
+    _slipChance: 0.2
+  - _name: Finer mesh
+    _slipChance: 0.1
+  - _name: Finest mesh
+    _slipChance: 0

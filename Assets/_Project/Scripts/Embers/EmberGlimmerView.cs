@@ -1,19 +1,25 @@
 using System.Collections.Generic;
+using Cinderbird.Core;
 using Cinderbird.Terrain;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Cinderbird.Embers
 {
     /// <summary>
     /// Shows small glowing dots on the mountain where buried embers are close to the surface.
-    /// Candidates are kept per chunk and recalculated only for chunks near a dig; the dots go to the
-    /// candidates nearest the viewer, re-picked a couple of times a second as the player moves.
+    /// Candidates are kept per chunk and recalculated only around a change (a dig, a slide), a slice per frame within a
+    /// small time budget, so even a huge change never stalls a frame. The dots go to the candidates nearest the
+    /// viewer, re-picked a couple of times a second as the player moves.
     /// </summary>
     [RequireComponent(typeof(VoxelTerrain))]
     public sealed class EmberGlimmerView : MonoBehaviour
     {
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        private static readonly ProfilerMarker RefreshMarker = new ProfilerMarker("Cinderbird.Glimmers");
+        // Embers this far beyond a dig may have been taken or uncovered by it; their glimmers go at once.
+        private const float TakenMargin = 0.3f;
 
         [SerializeField] private GlimmerSettings _settings;
         [SerializeField] private EmberTierCatalog _tierCatalog;
@@ -31,6 +37,8 @@ namespace Cinderbird.Embers
         private readonly List<int> _chunkScratch = new List<int>();
         private MaterialPropertyBlock _propertyBlock;
         private float _nextReselectTime;
+        private readonly List<GlimmerRefreshJob> _jobs = new List<GlimmerRefreshJob>();
+        private readonly Stack<GlimmerRefreshJob> _jobPool = new Stack<GlimmerRefreshJob>();
 
         private void Awake()
         {
@@ -51,7 +59,7 @@ namespace Cinderbird.Embers
             if (_visuals != null)
             {
                 _terrain.Dug += OnDug;
-                _terrain.DigStarted += OnDug;
+                _terrain.DigStarted += OnDigStarted;
                 _terrain.SettleFinished += OnSettled;
                 _terrain.Built += OnTerrainBuilt;
                 _terrain.Restored += OnTerrainBuilt;
@@ -67,7 +75,7 @@ namespace Cinderbird.Embers
             if (_visuals != null)
             {
                 _terrain.Dug -= OnDug;
-                _terrain.DigStarted -= OnDug;
+                _terrain.DigStarted -= OnDigStarted;
                 _terrain.SettleFinished -= OnSettled;
                 _terrain.Built -= OnTerrainBuilt;
                 _terrain.Restored -= OnTerrainBuilt;
@@ -83,6 +91,7 @@ namespace Cinderbird.Embers
                 return;
             }
 
+            ClearJobs();
             _chunkCandidates = new List<GlimmerPoint>[terrain.World.ChunkCount];
             for (int chunk = 0; chunk < _chunkCandidates.Length; chunk++)
             {
@@ -100,6 +109,7 @@ namespace Cinderbird.Embers
                 return;
             }
 
+            ProcessRefreshes();
             if (Time.time >= _nextReselectTime)
             {
                 Reselect();
@@ -120,6 +130,14 @@ namespace Cinderbird.Embers
             }
         }
 
+        // The embers a dig takes leave at once, so their glimmers go at once; the rest around it is worked out again over
+        // the next frames.
+        private void OnDigStarted(DigResult result, Vector3 center, float radius)
+        {
+            RemoveCandidatesNear(center, radius + TakenMargin);
+            RefreshAround(center, radius);
+        }
+
         private void OnDug(DigResult result, Vector3 center, float radius)
         {
             RefreshAround(center, radius);
@@ -132,6 +150,9 @@ namespace Cinderbird.Embers
             RefreshAround(changed.center, changed.extents.magnitude);
         }
 
+        // An ember's glimmer comes from probing up to MaxDepth around it, and the change touched samples only within its
+        // radius (plus one cell of blending). Embers farther away than both can't have changed, so only the ones within
+        // reach are probed again, chunk by chunk over the next frames.
         private void RefreshAround(Vector3 center, float radius)
         {
             if (_chunkCandidates == null)
@@ -139,25 +160,118 @@ namespace Cinderbird.Embers
                 return;
             }
 
-            // An ember's glimmer comes from probing up to MaxDepth around it, and the change touched samples only
-            // within its radius (plus one cell of blending). Embers farther away than both can't have changed, so
-            // only the ones within reach are probed again; probing every ember of the surrounding chunks took ms.
             AshTerrain terrain = _terrain.Terrain;
             float reach = radius + _settings.MaxDepth + terrain.World.CellSize;
             Vector3 extent = Vector3.one * reach;
             terrain.World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
-            for (int i = 0; i < _chunkScratch.Count; i++)
+            foreach (int chunk in _chunkScratch)
             {
-                RecollectNear(terrain, _chunkScratch[i], center, reach * reach);
+                GlimmerRefreshJob job = FindJob(chunk);
+                if (job != null)
+                {
+                    job.Widen(center, reach);
+                    continue;
+                }
+
+                job = _jobPool.Count > 0 ? _jobPool.Pop() : new GlimmerRefreshJob();
+                job.Start(chunk, center, reach);
+                _jobs.Add(job);
+            }
+        }
+
+        private GlimmerRefreshJob FindJob(int chunk)
+        {
+            foreach (GlimmerRefreshJob job in _jobs)
+            {
+                if (job.Chunk == chunk)
+                {
+                    return job;
+                }
+            }
+
+            return null;
+        }
+
+        // Probes embers until the frame's budget is spent; a chunk's new glimmers replace its old ones once it's done.
+        private void ProcessRefreshes()
+        {
+            if (_jobs.Count == 0)
+            {
+                return;
+            }
+
+            using (RefreshMarker.Auto())
+            {
+                AshTerrain terrain = _terrain.Terrain;
+                long started = TimeMeasure.Now();
+                float budget = _settings.RefreshBudgetMilliseconds;
+                bool applied = false;
+                bool outOfTime = false;
+                while (_jobs.Count > 0 && !outOfTime)
+                {
+                    GlimmerRefreshJob job = _jobs[0];
+                    EmberField embers = terrain.EmbersIn(job.Chunk);
+                    float reachSquared = job.ReachSquared;
+                    while (job.Cursor < embers.Count)
+                    {
+                        Ember ember = embers[job.Cursor++];
+                        if ((ember.Position - job.Center).sqrMagnitude <= reachSquared)
+                        {
+                            TryAddCandidate(terrain, ember, job.Found);
+                        }
+
+                        if ((job.Cursor & 15) == 0 && TimeMeasure.MillisecondsSince(started) >= budget)
+                        {
+                            outOfTime = true;
+                            break;
+                        }
+                    }
+
+                    if (job.Cursor < embers.Count)
+                    {
+                        continue;
+                    }
+
+                    ApplyJob(job);
+                    _jobs.RemoveAt(0);
+                    _jobPool.Push(job);
+                    applied = true;
+                    outOfTime |= TimeMeasure.MillisecondsSince(started) >= budget;
+                }
+
+                if (applied)
+                {
+                    Reselect();
+                }
+            }
+        }
+
+        private void ApplyJob(GlimmerRefreshJob job)
+        {
+            RemoveFrom(_chunkCandidates[job.Chunk], job.Center, job.ReachSquared);
+            _chunkCandidates[job.Chunk].AddRange(job.Found);
+            job.Found.Clear();
+        }
+
+        private void RemoveCandidatesNear(Vector3 center, float radius)
+        {
+            if (_chunkCandidates == null)
+            {
+                return;
+            }
+
+            Vector3 extent = Vector3.one * radius;
+            _terrain.Terrain.World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
+            foreach (int chunk in _chunkScratch)
+            {
+                RemoveFrom(_chunkCandidates[chunk], center, radius * radius);
             }
 
             Reselect();
         }
 
-        private void RecollectNear(AshTerrain terrain, int chunk, Vector3 center, float reachSquared)
+        private static void RemoveFrom(List<GlimmerPoint> candidates, Vector3 center, float reachSquared)
         {
-            // Drop this area's glimmers, including those of embers the dig just took...
-            List<GlimmerPoint> candidates = _chunkCandidates[chunk];
             for (int i = candidates.Count - 1; i >= 0; i--)
             {
                 if ((candidates[i].EmberPosition - center).sqrMagnitude <= reachSquared)
@@ -167,17 +281,16 @@ namespace Cinderbird.Embers
                     candidates.RemoveAt(last);
                 }
             }
+        }
 
-            // ...then probe the embers still buried there.
-            EmberField embers = terrain.EmbersIn(chunk);
-            for (int i = 0; i < embers.Count; i++)
+        private void ClearJobs()
+        {
+            foreach (GlimmerRefreshJob job in _jobs)
             {
-                Ember ember = embers[i];
-                if ((ember.Position - center).sqrMagnitude <= reachSquared)
-                {
-                    TryAddCandidate(terrain, ember, candidates);
-                }
+                _jobPool.Push(job);
             }
+
+            _jobs.Clear();
         }
 
         private void CreatePool()

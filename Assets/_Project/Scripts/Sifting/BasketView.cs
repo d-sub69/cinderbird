@@ -19,12 +19,16 @@ namespace Cinderbird.Sifting
         [SerializeField] private Renderer _emberPrefab;
         [Tooltip("Optional point light that brightens with the number of embers carried.")]
         [SerializeField] private Light _glowLight;
+        [Tooltip("Optional: the basket's body, scaled up for bigger baskets (see SetSize).")]
+        [SerializeField] private Transform _body;
 
         private EmberPoolDisplay _embers;
         // Per shown ember: time its drop started, or -1 when it is resting.
         private float[] _dropStartTimes;
         private float[] _restHeights;
         private bool _anyDropping;
+        private Vector3 _bodyBaseScale;
+        private float _sizeScale = 1f;
 
         private void Awake()
         {
@@ -35,14 +39,55 @@ namespace Cinderbird.Sifting
                 return;
             }
 
-            int capacity = _basket.Contents.Capacity;
-            _embers = new EmberPoolDisplay(_emberPrefab, _emberRoot, capacity, _settings.Radius, _settings.SpotJitter, _tierCatalog, this);
+            _bodyBaseScale = _body != null ? _body.localScale : Vector3.one;
+            if (_body != null)
+            {
+                _body.localScale = _bodyBaseScale * _sizeScale;
+            }
+
+            CreateDisplay(_basket.Contents.Capacity);
+        }
+
+        /// <summary>Sizes the basket for an upgrade: its body scales up and embers get spots across the bigger floor.</summary>
+        /// <param name="scale">Size relative to the first basket.</param>
+        public void SetSize(float scale, int capacity)
+        {
+            capacity = Mathf.Max(1, capacity);
+            scale = Mathf.Max(0.1f, scale);
+            if (_embers == null)
+            {
+                // Not started yet (inactive): Awake builds it at this size, with the basket's capacity.
+                _sizeScale = scale;
+                return;
+            }
+
+            if (Mathf.Approximately(scale, _sizeScale) && capacity == _embers.Capacity)
+            {
+                return;
+            }
+
+            _sizeScale = scale;
+            if (_body != null)
+            {
+                _body.localScale = _bodyBaseScale * _sizeScale;
+            }
+
+            _embers.Dispose();
+            CreateDisplay(capacity);
+            Refresh();
+        }
+
+        private void CreateDisplay(int capacity)
+        {
+            _embers = new EmberPoolDisplay(_emberPrefab, _emberRoot, capacity, _settings.Radius * _sizeScale, _settings.SpotJitter, _tierCatalog, this);
             _dropStartTimes = new float[capacity];
             _restHeights = new float[capacity];
             for (int i = 0; i < capacity; i++)
             {
                 _dropStartTimes[i] = -1f;
             }
+
+            _anyDropping = false;
         }
 
         private void OnEnable()

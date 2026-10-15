@@ -29,6 +29,9 @@ namespace Cinderbird.Save
         private readonly byte[][] _layers;
         private readonly List<Ember>[] _embers;
         private readonly int[] _copiedVersions;
+        // For WarmUp: each chunk's version when last looked at, and for how many calls it has stayed the same.
+        private readonly int[] _seenVersions;
+        private readonly int[] _unchangedCalls;
         private readonly bool[] _included;
         private readonly List<int> _chunkIndices = new List<int>();
 
@@ -44,6 +47,8 @@ namespace Cinderbird.Save
             _layers = new byte[worldChunkCount][];
             _embers = new List<Ember>[worldChunkCount];
             _copiedVersions = new int[worldChunkCount];
+            _seenVersions = new int[worldChunkCount];
+            _unchangedCalls = new int[worldChunkCount];
             _included = new bool[worldChunkCount];
         }
 
@@ -100,6 +105,46 @@ namespace Cinderbird.Save
 
                 _chunkIndices.Add(i);
             }
+        }
+
+        /// <summary>
+        /// Copies ahead of a save, a few at a time, changed chunks that have stopped changing (the same for
+        /// <paramref name="unchangedCalls"/> calls in a row), so the save's own <see cref="Update"/> has little left to
+        /// copy. Chunks still changing (sliding ash) are left for later. Same rule as Update: never while
+        /// <see cref="Encode"/> runs.
+        /// </summary>
+        /// <returns>How many chunks were copied.</returns>
+        public int WarmUp(AshTerrain terrain, int maxChunks, int unchangedCalls)
+        {
+            int copied = 0;
+            for (int i = 0; i < _included.Length; i++)
+            {
+                if (!terrain.IsChunkModified(i))
+                {
+                    continue;
+                }
+
+                int version = terrain.ChangeVersionOf(i);
+                if (version != _seenVersions[i])
+                {
+                    _seenVersions[i] = version;
+                    _unchangedCalls[i] = 0;
+                    continue;
+                }
+
+                _unchangedCalls[i]++;
+                if (copied >= maxChunks || _unchangedCalls[i] < unchangedCalls || (_included[i] && _copiedVersions[i] == version))
+                {
+                    continue;
+                }
+
+                CopyChunk(terrain, i);
+                _copiedVersions[i] = version;
+                _included[i] = true;
+                copied++;
+            }
+
+            return copied;
         }
 
         private void CopyChunk(AshTerrain terrain, int index)

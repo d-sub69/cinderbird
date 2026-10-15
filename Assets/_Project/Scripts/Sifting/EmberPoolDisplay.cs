@@ -65,6 +65,18 @@ namespace Cinderbird.Sifting
 
         public int Capacity => _visuals.Length;
 
+        /// <summary>Destroys the ember objects, e.g. before a bigger display replaces this one.</summary>
+        public void Dispose()
+        {
+            foreach (Renderer visual in _visuals)
+            {
+                if (visual != null)
+                {
+                    Object.Destroy(visual.gameObject);
+                }
+            }
+        }
+
         /// <summary>Embers currently assigned a spot (the first this-many of the list).</summary>
         public int ShownCount => _shownCount;
 

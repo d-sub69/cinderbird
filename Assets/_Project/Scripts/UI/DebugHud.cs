@@ -44,6 +44,10 @@ namespace Cinderbird.UI
         [SerializeField] private NestHeat _heat;
         [Tooltip("Optional: shows a reminder while test mode is on.")]
         [SerializeField] private TestModeSettings _testMode;
+        [Tooltip("Optional: confirms purchases.")]
+        [SerializeField] private ShopView _shop;
+        [Tooltip("Optional: tells when sparks slip through the sieve's mesh.")]
+        [SerializeField] private SieveMeshSlip _meshSlip;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -103,6 +107,15 @@ namespace Cinderbird.UI
                 _scoop.ScoopRefused += OnScoopRefused;
             }
             _pourController.PourRefused += OnPourRefused;
+            if (_shop != null)
+            {
+                _shop.Purchased += OnPurchased;
+            }
+
+            if (_meshSlip != null)
+            {
+                _meshSlip.Slipped += OnSlipped;
+            }
         }
 
         private void OnDisable()
@@ -140,6 +153,15 @@ namespace Cinderbird.UI
                 _scoop.ScoopRefused -= OnScoopRefused;
             }
             _pourController.PourRefused -= OnPourRefused;
+            if (_shop != null)
+            {
+                _shop.Purchased -= OnPurchased;
+            }
+
+            if (_meshSlip != null)
+            {
+                _meshSlip.Slipped -= OnSlipped;
+            }
         }
 
         private void Update()
@@ -320,6 +342,7 @@ namespace Cinderbird.UI
             AppendHeatLevel();
             AppendPourPrompt();
             AppendPickUpPrompt();
+            AppendUsePrompt();
             AppendPlacementPrompt();
 
             if (_message != null)
@@ -328,6 +351,16 @@ namespace Cinderbird.UI
             }
 
             _text.SetText(_builder);
+        }
+
+        private void OnPurchased(UpgradeDefinition upgrade, int level)
+        {
+            ShowMessage($"Bought: {upgrade.LevelName(level)}");
+        }
+
+        private void OnSlipped(int count)
+        {
+            ShowMessage(count == 1 ? "A spark slipped through the mesh" : $"{count} sparks slipped through the mesh");
         }
 
         private void OnLevelReached(int level)
@@ -404,6 +437,15 @@ namespace Cinderbird.UI
             if (holder != null)
             {
                 _builder.Append(" (").AppendInt(holder.Source.EmberCount).Append(" embers)");
+            }
+        }
+
+        private void AppendUsePrompt()
+        {
+            IInteractable target = _interactor.UseTarget;
+            if (target != null)
+            {
+                _builder.AppendLine().Append("E: ").Append(target.Prompt);
             }
         }
 

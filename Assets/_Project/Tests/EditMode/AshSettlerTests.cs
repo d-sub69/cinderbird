@@ -513,6 +513,25 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void LongSlideThroughSeveralLayers_KeepsFewLayerSlicesPerColumn()
+        {
+            AshTerrain terrain = CreateMountain();
+            terrain.Locks.UnlockThrough(2);
+            Vector3 top = new Vector3(3f, 4.2f, 0.3f);
+            DigPit(terrain, top, 1.2f, 4);
+            AshSettler settler = new AshSettler(new SettleParameters(35f, 3f, 0.5f, 0.02f));
+            settler.Begin(terrain, top, 1.2f);
+
+            for (int update = 0; update < 300 && settler.Step(4); update++)
+            {
+                settler.Commit();
+            }
+
+            Assert.That(settler.MostLayerSlicesInAColumn, Is.LessThanOrEqualTo(8), "thin alternating slices used to pile up without end");
+            settler.End();
+        }
+
+        [Test]
         public void LooseEmber_OnAPitsRim_RidesTheSlide()
         {
             AshTerrain terrain = CreateMountain();

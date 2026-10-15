@@ -24,6 +24,10 @@ namespace Cinderbird.UI
         private const int FrameWindow = 4096;
         private const string Red = "<color=#FF5A4A>";
         private const string EndColor = "</color>";
+        // A frame slower than this is written down with what the game was busy with (perf.log).
+        private const float HitchMilliseconds = 40f;
+        // At most this many hitch lines per log interval, so a bad stretch doesn't flood the log.
+        private const int MaxHitchLinesPerInterval = 20;
 
         [SerializeField] private TMP_Text _text;
         [SerializeField] private VoxelTerrain _terrain;
@@ -72,8 +76,16 @@ namespace Cinderbird.UI
         private float _worstSettleMeshSinceLog;
         private float _lastSettleMilliseconds;
         private int _lastSeenUpload;
+        private int _lastSeenColliderRound;
+        private float _worstColliderSinceLog;
         private float _worstUploadSinceLog;
         private bool _pausedOrLoading;
+
+        // Slow frames, written to perf.log with what they were busy with.
+        private readonly StringBuilder _hitchBuilder = new StringBuilder(256);
+        private FrameCostRecorders _costs;
+        private PerfLogFile _logFile;
+        private int _hitchLinesSinceLog;
 
         private void Awake()
         {
@@ -95,6 +107,7 @@ namespace Cinderbird.UI
             // QualitySettings.names builds a new array on every call; read it once.
             _qualityNames = QualitySettings.names;
             SetVisible(_visibleOnStart);
+            _logFile = new PerfLogFile(Application.persistentDataPath);
         }
 
         private void OnEnable()
@@ -106,6 +119,7 @@ namespace Cinderbird.UI
 
             // Counted by Unity in the Editor and in builds; reports 0 where the counter isn't available.
             _gcRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
+            _costs = new FrameCostRecorders();
             if (_terrain != null)
             {
                 _terrain.Dug += OnDug;
@@ -115,6 +129,8 @@ namespace Cinderbird.UI
         private void OnDisable()
         {
             _gcRecorder.Dispose();
+            _costs?.Dispose();
+            _costs = null;
             if (_terrain != null)
             {
                 _terrain.Dug -= OnDug;
@@ -187,13 +203,17 @@ namespace Cinderbird.UI
             b.Append(" | settles=").AppendInt(_settleUpdatesSinceLog).Append(" settle_max=").AppendFixed(_worstSettleSinceLog, 1)
                 .Append("ms (write ").AppendFixed(_worstSettleCommitSinceLog, 1).Append(" mesh ").AppendFixed(_worstSettleMeshSinceLog, 1)
                 .Append(") upload_max=").AppendFixed(_worstUploadSinceLog, 1)
+                .Append("ms collider_max=").AppendFixed(_worstColliderSinceLog, 1)
                 .Append("ms work_max=").AppendFixed(_worstSettleWorkSinceLog, 1).Append("ms");
             if (_bootstrap != null)
             {
                 b.Append(" | start=").AppendFixed(_bootstrap.StartupSeconds, 2).Append('s');
             }
 
-            Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, this, "{0}", b.ToString());
+            string line = b.ToString();
+            Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, this, "{0}", line);
+            _logFile?.WriteLine(line);
+            _hitchLinesSinceLog = 0;
             _digsSinceLog = 0;
             _worstDigSinceLog = 0f;
             _worstMeshSinceLog = 0f;
@@ -207,6 +227,7 @@ namespace Cinderbird.UI
             _worstSettleCommitSinceLog = 0f;
             _worstSettleMeshSinceLog = 0f;
             _worstUploadSinceLog = 0f;
+            _worstColliderSinceLog = 0f;
             _worstGcSinceLog = 0;
             _gcFramesSinceLog = 0;
             _skipGcFrames = 2;
@@ -219,7 +240,13 @@ namespace Cinderbird.UI
 
         private void Sample()
         {
-            _frames.Add(Time.unscaledDeltaTime * 1000f);
+            float frameMilliseconds = Time.unscaledDeltaTime * 1000f;
+            _frames.Add(frameMilliseconds);
+            if (frameMilliseconds > HitchMilliseconds && Time.timeScale > 0f && Time.frameCount > 10)
+            {
+                WriteHitch(frameMilliseconds);
+            }
+
             _pausedOrLoading |= Time.timeScale == 0f;
             if (_skipGcFrames > 0)
             {
@@ -251,6 +278,12 @@ namespace Cinderbird.UI
                 _worstSettleWorkSinceLog = Mathf.Max(_worstSettleWorkSinceLog, _settling.LastWorkMilliseconds);
                 _worstSettleCommitSinceLog = Mathf.Max(_worstSettleCommitSinceLog, _settling.LastCommitMilliseconds);
                 _worstSettleMeshSinceLog = Mathf.Max(_worstSettleMeshSinceLog, _settling.LastMeshMilliseconds);
+            }
+
+            if (_terrain.ColliderRoundCount != _lastSeenColliderRound)
+            {
+                _lastSeenColliderRound = _terrain.ColliderRoundCount;
+                _worstColliderSinceLog = Mathf.Max(_worstColliderSinceLog, _terrain.LastColliderMilliseconds);
             }
 
             // Sliding ash is meshed on workers and uploaded a frame later; that upload is main-thread time too.
@@ -368,6 +401,33 @@ namespace Cinderbird.UI
         private StringBuilder EndColored(bool over)
         {
             return over ? _builder.Append(EndColor) : _builder;
+        }
+
+        // The frame that just ended was slow: which of the game's own systems took the time (and Unity's garbage
+        // collector). Anything not listed is Unity itself (physics, rendering) or something not yet measured.
+        private void WriteHitch(float frameMilliseconds)
+        {
+            if (_hitchLinesSinceLog >= MaxHitchLinesPerInterval)
+            {
+                return;
+            }
+
+            _hitchLinesSinceLog++;
+            StringBuilder b = _hitchBuilder;
+            b.Clear();
+            b.Append("[Hitch] t=").AppendFixed(Time.unscaledTime, 1).Append("s frame=").AppendFixed(frameMilliseconds, 1).Append("ms |");
+            _costs?.AppendLastFrame(b);
+            b.Append(" | settling=").Append(_settling != null && _settling.IsSettling ? "yes" : "no");
+            string line = b.ToString();
+            Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, this, "{0}", line);
+            _logFile?.WriteLine(line);
+            // Writing the line allocated; keep that out of the garbage figure.
+            _skipGcFrames = System.Math.Max(_skipGcFrames, 2);
+        }
+
+        private void OnDestroy()
+        {
+            _logFile?.Dispose();
         }
 
         private void SetVisible(bool visible)

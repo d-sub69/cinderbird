@@ -274,5 +274,35 @@ namespace Cinderbird.Tests.EditMode
             Assert.That(sieve.LoadVolume, Is.EqualTo(0.1f));
             Assert.That(sieve.AshFraction, Is.EqualTo(1f));
         }
+
+        [Test]
+        public void TryAdd_ReportsWhereTheNewLoadStarts()
+        {
+            SieveContents sieve = new SieveContents();
+            sieve.TryAdd(0f, new List<Ember> { new Ember(Vector3.zero, 0) });
+            int first = -1;
+            int count = -1;
+            sieve.LoadAdded += (f, c) => { first = f; count = c; };
+
+            sieve.TryAdd(0.1f, new List<Ember> { new Ember(Vector3.one, 0), new Ember(Vector3.up, 1) });
+
+            Assert.That(first, Is.EqualTo(1));
+            Assert.That(count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void RemoveEmber_TakesThatOne_AndOnlyTheLastMovesIntoItsPlace()
+        {
+            SieveContents sieve = new SieveContents();
+            Ember a = new Ember(new Vector3(1f, 0f, 0f), 0);
+            Ember b = new Ember(new Vector3(2f, 0f, 0f), 0);
+            Ember c = new Ember(new Vector3(3f, 0f, 0f), 0);
+            sieve.TryAdd(0f, new List<Ember> { a, b, c });
+
+            Assert.That(sieve.RemoveEmber(a), Is.True);
+            Assert.That(sieve.RemoveEmber(a), Is.False, "Already gone");
+
+            Assert.That(sieve.Embers, Is.EqualTo(new[] { c, b }));
+        }
     }
 }

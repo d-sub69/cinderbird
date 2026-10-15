@@ -24,13 +24,15 @@ namespace Cinderbird.Save
         private readonly SieveFiller _sieveFiller;
         private readonly Basket _basket;
         private readonly PlaceableTool[] _placeableTools;
+        private readonly Upgrades _upgrades;
+        private readonly List<KeyValuePair<string, int>> _levelBuffer = new List<KeyValuePair<string, int>>();
         private readonly List<ToolDefinition> _slotBuffer = new List<ToolDefinition>();
         private readonly List<ToolDefinition> _placedBuffer = new List<ToolDefinition>();
         // Kept between saves, so only chunks changed since the last one are copied.
         private TerrainSnapshot _terrainSnapshot;
 
         public SaveStateMapper(VoxelTerrain pile, Wallet wallet, FirstPersonController player, ToolBelt toolBelt,
-            Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools)
+            Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools, Upgrades upgrades)
         {
             _pile = pile;
             _wallet = wallet;
@@ -40,6 +42,7 @@ namespace Cinderbird.Save
             _sieveFiller = sieveFiller;
             _basket = basket;
             _placeableTools = placeableTools;
+            _upgrades = upgrades;
         }
 
         /// <summary>
@@ -76,8 +79,25 @@ namespace Cinderbird.Save
             file.Player.Pose = _player.Pose;
             CaptureTools(file.Tools);
             CaptureSieve(file.Sieve);
+            CaptureUpgrades(file.Upgrades);
             EmberRecord.Fill(file.Basket.Embers, _basket.Contents.Embers);
             return file;
+        }
+
+        /// <summary>
+        /// Copies a few changed chunks that have stopped changing into the terrain snapshot ahead of the next save, so
+        /// that save copies little on the main thread. Only while no background write (which reads it) is running.
+        /// </summary>
+        public void WarmTerrainSnapshot(int maxChunks, int unchangedCalls)
+        {
+            AshTerrain ash = _pile.Terrain;
+            if (ash == null)
+            {
+                return;
+            }
+
+            _terrainSnapshot ??= new TerrainSnapshot(ash.World.GetChunk(0).Densities.Length, ash.World.ChunkCount);
+            _terrainSnapshot.WarmUp(ash, maxChunks, unchangedCalls);
         }
 
         /// <summary>
@@ -110,6 +130,8 @@ namespace Cinderbird.Save
             }
 
             _wallet.Currencies.Restore(Math.Max(0, file.Currencies.Glow), Math.Max(0, file.Currencies.Heat));
+            // Before the sieve and basket: their upgrades set the capacities the saved embers go into.
+            RestoreUpgrades(file.Upgrades);
             SieveSave sieve = file.Sieve;
             _sieve.Contents.Restore(Mathf.Max(0f, sieve.AshVolume), sieve.LoadVolume, sieve.AshColor, sieve.DustColor,
                 EmberRecord.ToEmbers(sieve.Embers));
@@ -121,6 +143,39 @@ namespace Cinderbird.Save
             }
 
             return sameMountain;
+        }
+
+        private void CaptureUpgrades(UpgradesSave save)
+        {
+            if (_upgrades == null)
+            {
+                return;
+            }
+
+            _upgrades.Levels.CopyTo(_levelBuffer);
+            foreach (KeyValuePair<string, int> level in _levelBuffer)
+            {
+                save.Levels.Add(new UpgradeLevelSave(level.Key, level.Value));
+            }
+        }
+
+        private void RestoreUpgrades(UpgradesSave saved)
+        {
+            if (_upgrades == null)
+            {
+                return;
+            }
+
+            _levelBuffer.Clear();
+            foreach (UpgradeLevelSave level in saved.Levels)
+            {
+                if (level != null)
+                {
+                    _levelBuffer.Add(new KeyValuePair<string, int>(level.Id, level.Level));
+                }
+            }
+
+            _upgrades.Levels.Restore(_levelBuffer);
         }
 
         private void RestoreTools(ToolsSave saved, bool restorePlaced)

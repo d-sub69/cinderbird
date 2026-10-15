@@ -85,6 +85,12 @@ namespace Cinderbird.UI
 
         private void OnBackPressed()
         {
+            // Esc in a menu in the world (the shop) is that menu's to handle.
+            if (_pause.Phase != GamePhase.Paused)
+            {
+                return;
+            }
+
             if (_confirmPanel.activeSelf)
             {
                 ShowConfirm(false);

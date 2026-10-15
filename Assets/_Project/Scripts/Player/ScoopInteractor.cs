@@ -40,7 +40,17 @@ namespace Cinderbird.Player
         /// <summary>True when the view ray hits diggable ash or a loose ember within reach this frame.</summary>
         public bool HasTarget => _targetTerrain != null || _aimedLooseId >= 0;
 
-        private float ScoopRadius => _settings.Radius * (_testMode != null ? _testMode.ScoopRadiusMultiplier : 1f);
+        // Set by the sieve upgrade; until then the settings give the radius.
+        private float _radiusOverride;
+
+        private float ScoopRadius => (_radiusOverride > 0f ? _radiusOverride : _settings.Radius) *
+                                     (_testMode != null ? _testMode.ScoopRadiusMultiplier : 1f);
+
+        /// <summary>The scoop radius of the sieve in hand, in meters (an upgrade sets it).</summary>
+        public void SetScoopRadius(float radius)
+        {
+            _radiusOverride = Mathf.Max(0.05f, radius);
+        }
 
         private void Awake()
         {

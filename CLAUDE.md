@@ -105,7 +105,9 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - Dig = subtract a sphere/capsule from the density field; return the **removed ash volume**.
 - Embers are **data points stored per chunk** (position + tier). Embers inside the removed volume move
   into the sieve's contents. Embers are not GameObjects until they are shown in the sieve or basket.
-- Marching cubes produces the mesh; collider updated for touched chunks.
+- Marching cubes produces the mesh; collider updated for touched chunks. Colliders bake in the background from their own
+  copy of the shape and are never waited for; sliding ash re-meshes a few chunks per frame and re-bakes colliders at
+  most 4× a second, so a slide of any size costs each frame about the same (`ChunkMeshUpdater`).
 - Settling (`AshSettler` / `AshSettling`): loose ash around a dig slides to the repose angle (50°, the generated
   mountain's own slopes count as stable), overhangs collapse, locked layers act as rock, mass is conserved exactly.
   A scoop drains out of the pile over the pour time while the walls sink in, as one simulation on a worker thread.
@@ -144,7 +146,7 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 
 ## Definition of done — Phase 2
 - [x] Heat levels 1–3 work and open layer 2 by the design rule; the HUD shows where I stand
-- [ ] I can buy the 3 sieves and the mesh in the shop and feel the difference
+- [x] I can buy the 3 sieves and the mesh in the shop and feel the difference
 - [ ] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
 - [ ] Shaking on the beat earns the Clean Sift bonus
 - [ ] A salamander cousin and Warm Wind help me

@@ -26,6 +26,13 @@ namespace Cinderbird.Save
     {
         private static readonly ProfilerMarker CaptureMarker = new ProfilerMarker("Cinderbird.Save");
 
+        // Longest an autosave waits for sliding ash to come to rest.
+        private const float MaxWaitForSettling = 30f;
+        // Ahead of a save, at most this many chunks that stopped changing are copied per frame...
+        private const int WarmChunksPerFrame = 1;
+        // ...once they have stayed the same for this many frames.
+        private const int WarmAfterUnchangedFrames = 30;
+
         // F9 reloads the scene to load the save; this makes that one start load it even when the Editor
         // setting says to start fresh. Static because the reload replaces this object.
         private static bool _loadOnNextStart;
@@ -46,6 +53,8 @@ namespace Cinderbird.Save
         [SerializeField] private PlaceableTool[] _placeableTools;
         [Tooltip("Optional: autosave waits while the game is paused.")]
         [SerializeField] private PauseController _pause;
+        [Tooltip("Optional: saves the upgrades bought in the shop.")]
+        [SerializeField] private Upgrades _upgrades;
 
         [Header("Debug keys")]
         [SerializeField] private InputActionReference _saveAction;
@@ -63,6 +72,10 @@ namespace Cinderbird.Save
         private bool _writesBlocked;
         // Nothing is saved before the save has been loaded: that would overwrite it with a fresh mountain.
         private bool _started;
+        // True while a loaded save is being put back; its changes are not new progress to save.
+        private bool _applying;
+        // When the pending save was first asked for; an autosave waits for sliding ash to rest, but not forever.
+        private float _requestedAt = -1f;
 
         /// <summary>Short messages for the player: saved, loaded, problems.</summary>
         public event Action<string> Notice;
@@ -110,7 +123,7 @@ namespace Cinderbird.Save
 
             string folder = _testFolder ?? Path.Combine(Application.persistentDataPath, _settings.FolderName);
             _slot = new SaveSlot(new SaveFileStore(folder, _settings.FileName));
-            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools);
+            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades);
         }
 
         private void OnEnable()
@@ -128,6 +141,10 @@ namespace Cinderbird.Save
             }
 
             _nest.Fed += OnFed;
+            if (_upgrades != null)
+            {
+                _upgrades.Levels.Changed += OnUpgradeChanged;
+            }
         }
 
         private void OnDisable()
@@ -138,6 +155,10 @@ namespace Cinderbird.Save
             }
 
             _nest.Fed -= OnFed;
+            if (_upgrades != null)
+            {
+                _upgrades.Levels.Changed -= OnUpgradeChanged;
+            }
         }
 
         private void Update()
@@ -159,16 +180,35 @@ namespace Cinderbird.Save
                 return;
             }
 
+            // Spreads the copying of changed terrain over many frames, so the save itself copies little.
+            if (_writeTask == null && !_writesBlocked)
+            {
+                _state.WarmTerrainSnapshot(WarmChunksPerFrame, WarmAfterUnchangedFrames);
+            }
+
             if (_settings.AutosaveInterval > 0f && Time.unscaledTime >= _nextAutosaveTime)
             {
                 _saveRequested = true;
             }
 
-            if (_saveRequested && TryStartSave())
+            if (_saveRequested && _requestedAt < 0f)
+            {
+                _requestedAt = Time.unscaledTime;
+            }
+
+            if (_saveRequested && CanSaveNow() && TryStartSave())
             {
                 _saveRequested = false;
+                _requestedAt = -1f;
                 _nextAutosaveTime = Time.unscaledTime + _settings.AutosaveInterval;
             }
+        }
+
+        // A save copies every chunk that changed since the last one; while ash slides that's many, still changing, so an
+        // autosave waits for the slide to rest (up to a limit). F5 saves at once.
+        private bool CanSaveNow()
+        {
+            return _announceNextWrite || !_pile.IsSettling || Time.unscaledTime - _requestedAt >= MaxWaitForSettling;
         }
 
         // Also runs when Play mode stops in the Editor.
@@ -177,6 +217,15 @@ namespace Cinderbird.Save
             if (_slot != null && _started)
             {
                 SaveImmediately();
+            }
+        }
+
+        // A purchase is saved right away: Glow was spent, and a crash must not lose what it bought.
+        private void OnUpgradeChanged(string id)
+        {
+            if (!_applying)
+            {
+                _saveRequested = true;
             }
         }
 
@@ -321,7 +370,18 @@ namespace Cinderbird.Save
 
         private void Apply(SaveFile file, TerrainSnapshot terrain)
         {
-            bool sameMountain = _state.Apply(file, terrain, out int lostBasketEmbers);
+            bool sameMountain;
+            int lostBasketEmbers;
+            _applying = true;
+            try
+            {
+                sameMountain = _state.Apply(file, terrain, out lostBasketEmbers);
+            }
+            finally
+            {
+                _applying = false;
+            }
+
             if (lostBasketEmbers > 0)
             {
                 Debug.LogWarning($"{lostBasketEmbers} saved embers didn't fit in the basket and were lost.", this);

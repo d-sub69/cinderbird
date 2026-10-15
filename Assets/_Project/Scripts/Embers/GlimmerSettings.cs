@@ -11,6 +11,8 @@ namespace Cinderbird.Embers
         [SerializeField, Min(1)] private int _maxGlimmers = 24;
         [Tooltip("Seconds between re-picking the glimmers nearest the viewer as they move; picking walks every candidate.")]
         [SerializeField, Min(0.05f)] private float _reselectInterval = 0.5f;
+        [Tooltip("Milliseconds per frame for working out glimmers again after a dig or slide; a big change takes a few frames.")]
+        [SerializeField, Min(0.1f)] private float _refreshBudgetMilliseconds = 1f;
 
         [Header("Look")]
         [Tooltip("Dot size relative to the ember's own visual size.")]
@@ -32,6 +34,7 @@ namespace Cinderbird.Embers
         public float MaxDepth => _maxDepth;
         public int MaxGlimmers => _maxGlimmers;
         public float ReselectInterval => _reselectInterval;
+        public float RefreshBudgetMilliseconds => _refreshBudgetMilliseconds;
         public float SizeScale => _sizeScale;
         public float Brightness => _brightness;
         public float DeepBrightness => _deepBrightness;

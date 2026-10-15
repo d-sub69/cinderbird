@@ -2,8 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Cinderbird.Core;
+using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Save;
+using Cinderbird.Sifting;
 using Cinderbird.Terrain;
 using NUnit.Framework;
 using UnityEngine;
@@ -103,6 +105,31 @@ namespace Cinderbird.Tests.PlayMode
             pile.Dig(top + new Vector3(0.6f, -0.2f, 0f), 0.4f, new List<Ember>(), null, 0.25f, 2f);
 
             Assert.That(dugCount, Is.EqualTo(1), "the first scoop's hole was completed before the second dig");
+        }
+
+        [Test]
+        public void BuyingTheNextSieve_SpendsGlow_AndTheSieveHoldsMore()
+        {
+            Upgrades upgrades = Object.FindAnyObjectByType<Upgrades>();
+            Sieve sieve = Object.FindAnyObjectByType<Sieve>(FindObjectsInactive.Include);
+            Assert.That(upgrades, Is.Not.Null, "Main has the upgrades (run Setup step 2B-2)");
+            SieveUpgrade sieveUpgrade = null;
+            foreach (UpgradeDefinition upgrade in upgrades.Catalog)
+            {
+                sieveUpgrade ??= upgrade as SieveUpgrade;
+            }
+
+            Assert.That(sieveUpgrade, Is.Not.Null, "the shop sells sieves");
+            int capacityBefore = sieve.Contents.EmberCapacity;
+            int price = upgrades.Shop.NextPrice(sieveUpgrade);
+            upgrades.Wallet.Currencies.Add(price, 0);
+            int glowBefore = upgrades.Wallet.Currencies.Glow;
+
+            Assert.That(upgrades.Shop.TryBuy(sieveUpgrade), Is.EqualTo(Purchase.Bought));
+
+            Assert.That(upgrades.Wallet.Currencies.Glow, Is.EqualTo(glowBefore - price));
+            Assert.That(sieve.Contents.EmberCapacity, Is.EqualTo(sieveUpgrade.TierAt(1).EmberCapacity));
+            Assert.That(sieve.Contents.EmberCapacity, Is.GreaterThan(capacityBefore));
         }
 
         // The highest ash under the pile's middle, found by a ray from above.

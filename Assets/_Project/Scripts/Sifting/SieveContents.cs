@@ -18,6 +18,9 @@ namespace Cinderbird.Sifting
 
         public event Action Changed;
 
+        /// <summary>Fired when a scooped load arrives, with the index of its first ember and how many it brought.</summary>
+        public event Action<int, int> LoadAdded;
+
         /// <summary>Cubic meters of ash still in the sieve.</summary>
         public float AshVolume { get; private set; }
 
@@ -74,7 +77,9 @@ namespace Cinderbird.Sifting
             LoadVolume = AshVolume;
             AshColor = ashColor;
             DustColor = dustColor;
+            int first = _embers.Count;
             _embers.AddRange(embers);
+            LoadAdded?.Invoke(first, embers.Count);
             Changed?.Invoke();
             return true;
         }
@@ -102,6 +107,26 @@ namespace Cinderbird.Sifting
             _embers.RemoveRange(start, taken);
             Changed?.Invoke();
             return taken;
+        }
+
+        /// <summary>
+        /// Takes one ember out (e.g. one slipping through the mesh). The last ember takes its place, so only that one
+        /// changes index (views keep every other ember where it is).
+        /// </summary>
+        /// <returns>False if no such ember is in the sieve.</returns>
+        public bool RemoveEmber(Ember ember)
+        {
+            int index = _embers.LastIndexOf(ember);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            int last = _embers.Count - 1;
+            _embers[index] = _embers[last];
+            _embers.RemoveAt(last);
+            Changed?.Invoke();
+            return true;
         }
 
         /// <summary>Replaces everything with a saved state. The ember capacity isn't saved; it comes from the settings.</summary>

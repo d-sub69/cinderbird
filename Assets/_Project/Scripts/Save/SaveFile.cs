@@ -10,8 +10,8 @@ namespace Cinderbird.Save
     [Serializable]
     public sealed class SaveFile
     {
-        // 2: loose embers in the terrain save.
-        public const int CurrentVersion = 2;
+        // 2: loose embers in the terrain save. 3: upgrades bought in the shop.
+        public const int CurrentVersion = 3;
 
         // Field names are the JSON keys: renaming one breaks older saves unless the migrator handles it.
         [SerializeField] private int _version = CurrentVersion;
@@ -22,6 +22,7 @@ namespace Cinderbird.Save
         [SerializeField] private ToolsSave _tools = new ToolsSave();
         [SerializeField] private SieveSave _sieve = new SieveSave();
         [SerializeField] private BasketSave _basket = new BasketSave();
+        [SerializeField] private UpgradesSave _upgrades = new UpgradesSave();
 
         public int Version { get => _version; set => _version = value; }
 
@@ -34,5 +35,6 @@ namespace Cinderbird.Save
         public ToolsSave Tools => _tools;
         public SieveSave Sieve => _sieve;
         public BasketSave Basket => _basket;
+        public UpgradesSave Upgrades => _upgrades;
     }
 }

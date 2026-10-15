@@ -31,6 +31,10 @@ namespace Cinderbird.Terrain
         private const int MaxStepsToRest = 4000;
         // Most dust spots per commit (where ash runs; see SettleParameters.MinSlideForDust).
         private const int MaxSlidePoints = 48;
+        // Sliding ash thinner than this (samples' worth) joins the slice it lands on instead of starting a new one...
+        private const float MinRunAmount = 0.05f;
+        // ...and a column keeps at most this many layer slices (see AppendRun).
+        private const int MaxRunsPerColumn = 8;
 
         // The 8 neighbors: 4 sides, then 4 diagonals.
         private static readonly int[] NeighborX = { 1, -1, 0, 0, 1, 1, -1, -1 };
@@ -309,6 +313,21 @@ namespace Cinderbird.Terrain
             }
 
             return true;
+        }
+
+        /// <summary>The most layer slices any column of the area holds (for tests: they must stay few).</summary>
+        public int MostLayerSlicesInAColumn
+        {
+            get
+            {
+                int most = 0;
+                for (int i = 0; IsActive && i < _width * _depth; i++)
+                {
+                    most = Math.Max(most, _runs[i].Count);
+                }
+
+                return most;
+            }
         }
 
         /// <summary>Writes every column changed since the last commit into the terrain, and moves its embers.</summary>
@@ -640,6 +659,10 @@ namespace Cinderbird.Terrain
             }
         }
 
+        // Ash from several layers arriving from all sides would otherwise pile up endless thin alternating slices in a
+        // long slide, and every step and commit walks them: a 30 s slide grew to half a second per commit. Thin bits
+        // join the slice they land on, and a column keeps a few slices at most; the ash itself is never lost, only the
+        // boundary between two layers blurs a little.
         private static void AppendRun(List<LayerRun> runs, byte layer, float amount)
         {
             if (amount <= 0f)
@@ -648,13 +671,21 @@ namespace Cinderbird.Terrain
             }
 
             int last = runs.Count - 1;
-            if (last >= 0 && runs[last].Layer == layer)
+            if (last >= 0 && (runs[last].Layer == layer || amount < MinRunAmount))
             {
                 runs[last] = runs[last].WithAmount(runs[last].Amount + amount);
                 return;
             }
 
             runs.Add(new LayerRun(layer, amount));
+            if (runs.Count > MaxRunsPerColumn)
+            {
+                // The top two become one, with the layer of the bigger part.
+                LayerRun top = runs[runs.Count - 1];
+                LayerRun below = runs[runs.Count - 2];
+                runs.RemoveAt(runs.Count - 1);
+                runs[runs.Count - 1] = new LayerRun(top.Amount > below.Amount ? top.Layer : below.Layer, top.Amount + below.Amount);
+            }
         }
 
         private void MarkChanged(int i, int x, int z)

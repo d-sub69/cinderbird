@@ -33,6 +33,8 @@ namespace Cinderbird.Sifting
 
         [Tooltip("Optional: draws the ash rising while a scooped load is still pouring in.")]
         [SerializeField] private SieveFiller _filler;
+        [Tooltip("Optional: the sieve's body, scaled up for bigger sieves (see SetSize).")]
+        [SerializeField] private Transform _body;
 
         [Header("Buried glimmer")]
         [SerializeField] private GlimmerSettings _glimmerSettings;
@@ -47,6 +49,11 @@ namespace Cinderbird.Sifting
         private MaterialPropertyBlock _propertyBlock;
         private MaterialPropertyBlock _ashBlock;
         private Renderer _ashRenderer;
+        private Vector3 _bodyBaseScale;
+        private Vector3 _ashBaseScale;
+        private float _sizeScale = 1f;
+        // Set by SetSize, possibly before Awake (a stowed sieve is inactive); 0 = the settings' count.
+        private int _visibleEmbers;
 
         private void Awake()
         {
@@ -58,19 +65,67 @@ namespace Cinderbird.Sifting
                 return;
             }
 
-            _embers = new EmberPoolDisplay(
-                _emberPrefab,
-                _emberRoot,
-                _settings.MaxVisibleEmbers,
-                _settings.Radius * UsableRadiusFraction,
-                _settings.SpotJitter,
-                _tierCatalog,
-                this);
+            _bodyBaseScale = _body != null ? _body.localScale : Vector3.one;
+            _ashBaseScale = _ashDisc.localScale;
+            if (_body != null)
+            {
+                _body.localScale = _bodyBaseScale * _sizeScale;
+            }
+
+            _embers = CreateDisplay(VisibleEmbers);
             _minCoverHeight = LargestEmberSize() * EmberTopPerSize * CoverMargin;
             _propertyBlock = new MaterialPropertyBlock();
             _ashBlock = new MaterialPropertyBlock();
             _ashRenderer = _ashDisc.GetComponent<Renderer>();
-            CreateGlimmerPool();
+            CreateGlimmerPool(VisibleEmbers);
+        }
+
+        private int VisibleEmbers => _visibleEmbers > 0 ? _visibleEmbers : _settings.MaxVisibleEmbers;
+
+        /// <summary>
+        /// Sizes the sieve for an upgrade: the body and ash disc scale up, and embers get spots across the bigger floor.
+        /// </summary>
+        /// <param name="scale">Size relative to the first sieve.</param>
+        /// <param name="visibleEmbers">How many embers it shows at most (its capacity).</param>
+        public void SetSize(float scale, int visibleEmbers)
+        {
+            visibleEmbers = Mathf.Max(1, visibleEmbers);
+            scale = Mathf.Max(0.1f, scale);
+            if (_embers == null)
+            {
+                // Not started yet (inactive): Awake builds it at this size.
+                _sizeScale = scale;
+                _visibleEmbers = visibleEmbers;
+                return;
+            }
+
+            if (Mathf.Approximately(scale, _sizeScale) && visibleEmbers == _embers.Capacity)
+            {
+                return;
+            }
+
+            _sizeScale = scale;
+            _visibleEmbers = visibleEmbers;
+            if (_body != null)
+            {
+                _body.localScale = _bodyBaseScale * _sizeScale;
+            }
+
+            _embers.Dispose();
+            _embers = CreateDisplay(visibleEmbers);
+            foreach (Renderer glimmer in _glimmers)
+            {
+                Destroy(glimmer.gameObject);
+            }
+
+            CreateGlimmerPool(visibleEmbers);
+            Refresh();
+        }
+
+        private EmberPoolDisplay CreateDisplay(int visibleEmbers)
+        {
+            return new EmberPoolDisplay(_emberPrefab, _emberRoot, visibleEmbers, _settings.Radius * _sizeScale * UsableRadiusFraction,
+                _settings.SpotJitter, _tierCatalog, this);
         }
 
         private void OnEnable()
@@ -121,9 +176,8 @@ namespace Cinderbird.Sifting
             }
         }
 
-        private void CreateGlimmerPool()
+        private void CreateGlimmerPool(int count)
         {
-            int count = _settings.MaxVisibleEmbers;
             _glimmers = new Renderer[count];
             _glimmerEmission = new Color[count];
             for (int i = 0; i < count; i++)
@@ -263,8 +317,8 @@ namespace Cinderbird.Sifting
             // Unity's cylinder primitive is 2 units tall at scale 1, so scale.y is half the height.
             // Raising it by the same amount keeps the bottom on the sieve floor.
             float halfHeight = height * 0.5f;
-            Vector3 scale = _ashDisc.localScale;
-            _ashDisc.localScale = new Vector3(scale.x, halfHeight, scale.z);
+            // Its width follows the sieve's size.
+            _ashDisc.localScale = new Vector3(_ashBaseScale.x * _sizeScale, halfHeight, _ashBaseScale.z * _sizeScale);
             Vector3 position = _ashDisc.localPosition;
             _ashDisc.localPosition = new Vector3(position.x, halfHeight, position.z);
         }

@@ -19,6 +19,16 @@ namespace Cinderbird.Sifting
 
         public IEmberSource Source => Contents;
 
+        // Set by the sieve upgrade; until then the settings give the capacity.
+        private int _capacityOverride;
+
+        /// <summary>The ember capacity of the sieve in hand (an upgrade sets it); test mode can still lift it.</summary>
+        public void SetCapacity(int capacity)
+        {
+            _capacityOverride = Mathf.Max(1, capacity);
+            ApplyCapacity();
+        }
+
         private void Awake()
         {
             ApplyCapacity();
@@ -35,6 +45,10 @@ namespace Cinderbird.Sifting
             if (_testMode != null && _testMode.UnlimitedSieveEmbers)
             {
                 Contents.EmberCapacity = int.MaxValue;
+            }
+            else if (_capacityOverride > 0)
+            {
+                Contents.EmberCapacity = _capacityOverride;
             }
             else if (_settings != null)
             {

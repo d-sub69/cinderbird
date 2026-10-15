@@ -68,7 +68,7 @@ namespace Cinderbird.UI
         {
             return (_scoop.isActiveAndEnabled && _scoop.HasTarget) ||
                    (_pour != null && _pour.HasTarget) ||
-                   (_interactor != null && _interactor.PickUpTarget != null);
+                   (_interactor != null && (_interactor.PickUpTarget != null || _interactor.UseTarget != null));
         }
 
         private CrosshairAccent CurrentAccent()

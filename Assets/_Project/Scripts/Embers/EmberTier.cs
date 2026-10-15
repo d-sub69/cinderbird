@@ -22,6 +22,10 @@ namespace Cinderbird.Embers
         [Tooltip("Relative chance compared to other tiers. 0 = never spawns.")]
         [SerializeField, Min(0f)] private float _spawnWeight = 80f;
 
+        [Header("Sifting")]
+        [Tooltip("Small enough to slip through a coarse sieve mesh while shaking (the mesh upgrade stops it).")]
+        [SerializeField] private bool _slipsThroughMesh;
+
         public string DisplayName => _displayName;
         public Color Color => _color;
         public Color EmissionColor => _color * _emissionIntensity;
@@ -29,5 +33,6 @@ namespace Cinderbird.Embers
         public int GlowValue => _glowValue;
         public int HeatValue => _heatValue;
         public float SpawnWeight => _spawnWeight;
+        public bool SlipsThroughMesh => _slipsThroughMesh;
     }
 }

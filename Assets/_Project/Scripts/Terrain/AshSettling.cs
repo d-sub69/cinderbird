@@ -21,6 +21,7 @@ namespace Cinderbird.Terrain
     public sealed class AshSettling : MonoBehaviour
     {
         private static readonly ProfilerMarker SettleMarker = new ProfilerMarker("Cinderbird.Settle");
+        private static readonly ProfilerMarker WaitMarker = new ProfilerMarker("Cinderbird.SettleWait");
 
         [SerializeField] private SettleSettings _settings;
         [Tooltip("Optional: puffs of dust where ash runs. World-space simulation.")]
@@ -274,7 +275,13 @@ namespace Cinderbird.Terrain
         private bool FinishWork()
         {
             _working = false;
-            bool moving = _worker.Wait(out Exception error);
+            bool moving;
+            Exception error;
+            using (WaitMarker.Auto())
+            {
+                moving = _worker.Wait(out error);
+            }
+
             if (error == null)
             {
                 LastWorkMilliseconds = _workMilliseconds;

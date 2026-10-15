@@ -213,15 +213,49 @@ namespace Cinderbird.Tests.EditMode
         {
             // A version 1 save has no loose-ember key at all.
             string json = SaveSerializer.ToJson(CreateFile(5))
-                .Replace("\"_version\": 2", "\"_version\": 1")
+                .Replace($"\"_version\": {SaveFile.CurrentVersion}", "\"_version\": 1")
                 .Replace("\"_looseEmbers\": []", "\"_unused\": []");
 
             bool parsed = SaveSerializer.TryParse(json, out SaveFile file, out string error);
+
+            Assert.That(json, Does.Contain("\"_version\": 1"), "the test really made a version 1 save");
 
             Assert.That(parsed, Is.True, error);
             Assert.That(file.Version, Is.EqualTo(SaveFile.CurrentVersion));
             Assert.That(file.Currencies.Glow, Is.EqualTo(5));
             Assert.That(file.Terrain.LooseEmbers, Is.Empty);
+        }
+
+        [Test]
+        public void Upgrades_SurviveSaveAndLoad()
+        {
+            SaveFile file = CreateFile(3);
+            file.Upgrades.Levels.Add(new UpgradeLevelSave("sieve", 2));
+            file.Upgrades.Levels.Add(new UpgradeLevelSave("mesh", 1));
+
+            _slot.Write(file, null);
+            _slot.TryLoad(out SaveFile loaded, out _, out _);
+
+            Assert.That(loaded.Upgrades.Levels.Count, Is.EqualTo(2));
+            Assert.That(loaded.Upgrades.Levels[0].Id, Is.EqualTo("sieve"));
+            Assert.That(loaded.Upgrades.Levels[0].Level, Is.EqualTo(2));
+            Assert.That(loaded.Upgrades.Levels[1].Id, Is.EqualTo("mesh"));
+        }
+
+        [Test]
+        public void Version2Save_StillLoads_WithNothingBought()
+        {
+            // A version 2 save has no upgrades key at all.
+            string json = SaveSerializer.ToJson(CreateFile(5))
+                .Replace($"\"_version\": {SaveFile.CurrentVersion}", "\"_version\": 2")
+                .Replace("\"_upgrades\"", "\"_unusedUpgrades\"");
+
+            bool parsed = SaveSerializer.TryParse(json, out SaveFile file, out string error);
+
+            Assert.That(json, Does.Contain("\"_version\": 2"), "the test really made a version 2 save");
+            Assert.That(parsed, Is.True, error);
+            Assert.That(file.Version, Is.EqualTo(SaveFile.CurrentVersion));
+            Assert.That(file.Upgrades.Levels, Is.Empty);
         }
     }
 }

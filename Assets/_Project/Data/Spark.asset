@@ -19,3 +19,4 @@ MonoBehaviour:
   _glowValue: 1
   _heatValue: 1
   _spawnWeight: 80
+  _slipsThroughMesh: 1
