@@ -37,6 +37,8 @@ namespace Cinderbird.Terrain
         private AshSettling _settling;
         // Embers the dig in progress grazed, laid loose when its hole is complete.
         private readonly List<LooseEmber> _pendingExposed = new List<LooseEmber>();
+        // Finds (offerings) the dig in progress reached, shown lying in the hole once it's complete.
+        private readonly List<BuriedFind> _pendingFinds = new List<BuriedFind>();
 
         /// <summary>Fired once <see cref="Build"/> has generated and meshed the mountain.</summary>
         public event Action Built;
@@ -49,6 +51,12 @@ namespace Cinderbird.Terrain
 
         /// <summary>Fired after a dig with what it removed and the dug sphere (local center, radius).</summary>
         public event Action<DigResult, Vector3, float> Dug;
+
+        /// <summary>
+        /// Fired when a dig has uncovered buried finds (offerings) and its hole is open, with where they lay (valid during the
+        /// call). They are no longer in the ash: whoever shows them takes over.
+        /// </summary>
+        public event Action<IReadOnlyList<BuriedFind>> FindsUncovered;
 
         /// <summary>Fired when a dig removed nothing because it hit a locked layer (the layer index).</summary>
         public event Action<int> DigBlocked;
@@ -81,6 +89,9 @@ namespace Cinderbird.Terrain
         public AshTerrain Terrain => _terrain;
 
         public bool IsBuilt => _terrain != null;
+
+        /// <summary>Radius of the generated mountain at its foot, in meters (its middle is at local 0, 0).</summary>
+        public float PileRadius => _settings != null ? _settings.PileShape.Radius : 0f;
 
         /// <summary>Whether ash is moving right now (a scoop draining or a slide running).</summary>
         public bool IsSettling => _settling != null && _settling.IsSettling;
@@ -202,7 +213,8 @@ namespace Cinderbird.Terrain
                 long started = TimeMeasure.Now();
                 Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
                 _pendingExposed.Clear();
-                DigResult result = _terrain.StartDig(localCenter, radius, extractedEmbers, removedByLayer, _pendingExposed, exposeMargin);
+                _pendingFinds.Clear();
+                DigResult result = _terrain.StartDig(localCenter, radius, extractedEmbers, removedByLayer, _pendingExposed, exposeMargin, _pendingFinds);
                 if (!result.RemovedAnyAsh && result.EmberCount == 0)
                 {
                     if (result.WasBlocked)
@@ -316,6 +328,12 @@ namespace Cinderbird.Terrain
             if (any)
             {
                 LooseEmbersChanged?.Invoke();
+            }
+
+            if (_pendingFinds.Count > 0)
+            {
+                FindsUncovered?.Invoke(_pendingFinds);
+                _pendingFinds.Clear();
             }
         }
 

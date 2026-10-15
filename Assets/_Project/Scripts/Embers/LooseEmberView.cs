@@ -11,7 +11,7 @@ namespace Cinderbird.Embers
     /// that comes over them and let down where it runs away, never buried again (<see cref="LooseEmberRules"/>). Also
     /// finds the one the player is aiming at and hands it over when picked up with the sieve.
     /// </summary>
-    public sealed class LooseEmberView : MonoBehaviour, IFallSurface
+    public sealed class LooseEmberView : MonoBehaviour
     {
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
@@ -36,6 +36,7 @@ namespace Cinderbird.Embers
         private readonly Stack<Renderer> _pool = new Stack<Renderer>();
         private readonly List<int> _scratchIds = new List<int>();
         private MaterialPropertyBlock _propertyBlock;
+        private AshFallSurface _surface;
         private Transform _container;
         private bool _checkPending = true;
         private float _nextCheckTime;
@@ -52,6 +53,7 @@ namespace Cinderbird.Embers
             }
 
             _propertyBlock = new MaterialPropertyBlock();
+            _surface = new AshFallSurface(_pile, _groundMask);
             _container = new GameObject("Loose Embers").transform;
         }
 
@@ -190,7 +192,7 @@ namespace Cinderbird.Embers
                 float radius = RadiusOf(item.Ember.TierIndex);
                 if (!LooseEmberRules.TryFindSurface(terrain.World, center, radius, MaxCoverSearch, out float surface))
                 {
-                    if (!IsOnGround(center, radius))
+                    if (!_surface.IsOnGround(center, radius))
                     {
                         _falling[item.Id] = 0f;
                         terrain.SetLooseRest(i, LooseEmber.UnknownRest);
@@ -210,13 +212,6 @@ namespace Cinderbird.Embers
                     terrain.SetLooseRest(i, rest);
                 }
             }
-        }
-
-        // Ground or rocks right under it (not ash: that is the density field's job).
-        private bool IsOnGround(Vector3 localCenter, float radius)
-        {
-            Vector3 world = _pile.transform.TransformPoint(localCenter);
-            return Physics.Raycast(world, Vector3.down, radius + 0.05f, _groundMask, QueryTriggerInteraction.Ignore);
         }
 
         private void AdvanceFalls(AshTerrain terrain, float deltaTime)
@@ -239,7 +234,7 @@ namespace Cinderbird.Embers
                 }
 
                 Ember ember = terrain.LooseEmbers[index].Ember;
-                FallStep step = LooseEmberFall.Advance(ember.Position, _falling[id], RadiusOf(ember.TierIndex), deltaTime, fall, this);
+                FallStep step = LooseEmberFall.Advance(ember.Position, _falling[id], RadiusOf(ember.TierIndex), deltaTime, fall, _surface);
                 terrain.MoveLoose(index, step.Position);
                 if (step.Resting)
                 {
@@ -252,41 +247,6 @@ namespace Cinderbird.Embers
                     _falling[id] = step.Speed;
                 }
             }
-        }
-
-        // Lands on ash (from the density field, which is up to date at once) or on any collider below.
-        bool IFallSurface.TryLand(Vector3 center, float drop, float radius, out Vector3 landed)
-        {
-            bool hit = TryLandWorld(_pile.transform.TransformPoint(center), drop, radius, out Vector3 landedWorld);
-            landed = hit ? _pile.transform.InverseTransformPoint(landedWorld) : center;
-            return hit;
-        }
-
-        private bool TryLandWorld(Vector3 world, float step, float radius, out Vector3 landedWorld)
-        {
-            Vector3 nextLocal = _pile.transform.InverseTransformPoint(world + Vector3.down * step);
-            if (LooseEmberRules.RestsOnAsh(_pile.Terrain.World, nextLocal, radius))
-            {
-                landedWorld = world + Vector3.down * step;
-                return true;
-            }
-
-            if (Physics.Raycast(world, Vector3.down, out RaycastHit hit, step + radius, _groundMask, QueryTriggerInteraction.Ignore))
-            {
-                landedWorld = hit.point + Vector3.up * radius;
-                return true;
-            }
-
-            // Never through the floor the mountain stands on.
-            float floor = _pile.transform.TransformPoint(new Vector3(0f, _pile.LocalFloorHeight, 0f)).y;
-            if (world.y - step - radius <= floor)
-            {
-                landedWorld = new Vector3(world.x, floor + radius, world.z);
-                return true;
-            }
-
-            landedWorld = default;
-            return false;
         }
 
         private void SyncVisuals(AshTerrain terrain)

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Cinderbird.Core;
 using Cinderbird.Terrain;
 using UnityEngine;
@@ -7,8 +8,8 @@ namespace Cinderbird.Embers
 {
     /// <summary>
     /// Testing aid (Test Mode → Show All Embers): draws every buried ember of the mountain as a small marker in its
-    /// tier's color, seen through the ash. One mesh in one draw call, rebuilt only when embers change, and nothing
-    /// at all while the option is off.
+    /// tier's color, and every buried offering as a bigger magenta one, seen through the ash. One mesh in one draw call,
+    /// rebuilt only when embers change, and nothing at all while the option is off.
     /// </summary>
     [RequireComponent(typeof(VoxelTerrain))]
     public sealed class EmberXRayView : MonoBehaviour
@@ -132,6 +133,13 @@ namespace Cinderbird.Embers
                     color.a = 1f;
                     _builder.Add(ember.Position, _markerSize, color);
                 }
+            }
+
+            // Buried offerings too, bigger and in magenta, so test runs can find them.
+            IReadOnlyList<BuriedFind> finds = terrain.Finds;
+            for (int i = 0; i < finds.Count; i++)
+            {
+                _builder.Add(finds[i].Position, _markerSize * 2.5f, Color.magenta);
             }
 
             _mesh.Clear();

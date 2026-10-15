@@ -243,6 +243,20 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void Offerings_SurviveSaveAndLoad()
+        {
+            SaveFile file = CreateFile(3);
+            file.Offerings.Found.Add(new OfferingStateSave("wooden_bird", 2));
+
+            _slot.Write(file, null);
+            _slot.TryLoad(out SaveFile loaded, out _, out _);
+
+            Assert.That(loaded.Offerings.Found.Count, Is.EqualTo(1));
+            Assert.That(loaded.Offerings.Found[0].Id, Is.EqualTo("wooden_bird"));
+            Assert.That(loaded.Offerings.Found[0].State, Is.EqualTo(2));
+        }
+
+        [Test]
         public void Version2Save_StillLoads_WithNothingBought()
         {
             // A version 2 save has no upgrades key at all.

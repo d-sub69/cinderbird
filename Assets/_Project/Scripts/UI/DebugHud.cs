@@ -4,6 +4,7 @@ using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
+using Cinderbird.Offerings;
 using Cinderbird.Player;
 using Cinderbird.Save;
 using Cinderbird.Sifting;
@@ -23,6 +24,8 @@ namespace Cinderbird.UI
         // Debug display timing, not game balance, so these live here rather than in a settings asset.
         private const float RefreshInterval = 0.1f;
         private const float MessageDuration = 2f;
+        // News about offerings stays a little longer than other messages.
+        private const float FoundCardDuration = 5f;
 
         [SerializeField] private TMP_Text _text;
         [SerializeField] private Sieve _sieve;
@@ -48,6 +51,8 @@ namespace Cinderbird.UI
         [SerializeField] private ShopView _shop;
         [Tooltip("Optional: tells when sparks slip through the sieve's mesh.")]
         [SerializeField] private SieveMeshSlip _meshSlip;
+        [Tooltip("Optional: tells when an offering is uncovered and when a shelf set is complete.")]
+        [SerializeField] private Shrine _shrine;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -116,6 +121,12 @@ namespace Cinderbird.UI
             {
                 _meshSlip.Slipped += OnSlipped;
             }
+
+            if (_shrine != null)
+            {
+                _shrine.Uncovered += OnOfferingUncovered;
+                _shrine.SetCompleted += OnSetCompleted;
+            }
         }
 
         private void OnDisable()
@@ -161,6 +172,12 @@ namespace Cinderbird.UI
             if (_meshSlip != null)
             {
                 _meshSlip.Slipped -= OnSlipped;
+            }
+
+            if (_shrine != null)
+            {
+                _shrine.Uncovered -= OnOfferingUncovered;
+                _shrine.SetCompleted -= OnSetCompleted;
             }
         }
 
@@ -271,8 +288,13 @@ namespace Cinderbird.UI
 
         private void ShowMessage(string message)
         {
+            ShowMessage(message, MessageDuration);
+        }
+
+        private void ShowMessage(string message, float seconds)
+        {
             _message = message;
-            _messageEndTime = Time.unscaledTime + MessageDuration;
+            _messageEndTime = Time.unscaledTime + seconds;
             _dirty = true;
             // Feedback should appear on the press, not up to one refresh interval later.
             _nextRefreshTime = 0f;
@@ -356,6 +378,16 @@ namespace Cinderbird.UI
         private void OnPurchased(UpgradeDefinition upgrade, int level)
         {
             ShowMessage($"Bought: {upgrade.LevelName(level)}");
+        }
+
+        private void OnOfferingUncovered(OfferingDefinition offering)
+        {
+            ShowMessage("Something glints in the ash: look in the hole and pick it up (E)", FoundCardDuration);
+        }
+
+        private void OnSetCompleted(OfferingSet set)
+        {
+            ShowMessage($"Set complete: {set.DisplayName}. {set.DescribeBonus()}", FoundCardDuration);
         }
 
         private void OnSlipped(int count)

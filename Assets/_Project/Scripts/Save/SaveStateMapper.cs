@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
+using Cinderbird.Offerings;
 using Cinderbird.Player;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
@@ -25,6 +26,8 @@ namespace Cinderbird.Save
         private readonly Basket _basket;
         private readonly PlaceableTool[] _placeableTools;
         private readonly Upgrades _upgrades;
+        private readonly Shrine _shrine;
+        private readonly List<OfferingState> _stateBuffer = new List<OfferingState>();
         private readonly List<KeyValuePair<string, int>> _levelBuffer = new List<KeyValuePair<string, int>>();
         private readonly List<ToolDefinition> _slotBuffer = new List<ToolDefinition>();
         private readonly List<ToolDefinition> _placedBuffer = new List<ToolDefinition>();
@@ -32,7 +35,7 @@ namespace Cinderbird.Save
         private TerrainSnapshot _terrainSnapshot;
 
         public SaveStateMapper(VoxelTerrain pile, Wallet wallet, FirstPersonController player, ToolBelt toolBelt,
-            Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools, Upgrades upgrades)
+            Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools, Upgrades upgrades, Shrine shrine)
         {
             _pile = pile;
             _wallet = wallet;
@@ -43,6 +46,7 @@ namespace Cinderbird.Save
             _basket = basket;
             _placeableTools = placeableTools;
             _upgrades = upgrades;
+            _shrine = shrine;
         }
 
         /// <summary>
@@ -80,6 +84,7 @@ namespace Cinderbird.Save
             CaptureTools(file.Tools);
             CaptureSieve(file.Sieve);
             CaptureUpgrades(file.Upgrades);
+            CaptureOfferings(file.Offerings);
             EmberRecord.Fill(file.Basket.Embers, _basket.Contents.Embers);
             return file;
         }
@@ -132,6 +137,7 @@ namespace Cinderbird.Save
             _wallet.Currencies.Restore(Math.Max(0, file.Currencies.Glow), Math.Max(0, file.Currencies.Heat));
             // Before the sieve and basket: their upgrades set the capacities the saved embers go into.
             RestoreUpgrades(file.Upgrades);
+            RestoreOfferings(file.Offerings);
             SieveSave sieve = file.Sieve;
             _sieve.Contents.Restore(Mathf.Max(0f, sieve.AshVolume), sieve.LoadVolume, sieve.AshColor, sieve.DustColor,
                 EmberRecord.ToEmbers(sieve.Embers));
@@ -143,6 +149,54 @@ namespace Cinderbird.Save
             }
 
             return sameMountain;
+        }
+
+        private void CaptureOfferings(OfferingsSave save)
+        {
+            if (_shrine == null)
+            {
+                return;
+            }
+
+            OfferingCollection collection = _shrine.Collection;
+            for (int i = 0; i < collection.Count; i++)
+            {
+                OfferingState state = collection.StateOf(i);
+                if (state != OfferingState.Buried && _shrine.Catalog[i] != null)
+                {
+                    save.Found.Add(new OfferingStateSave(_shrine.Catalog[i].Id, (int)state, _shrine.PilePositionOf(i)));
+                }
+            }
+
+            _shrine.CopyActiveSetIds(save.ActiveSets);
+        }
+
+        // Offerings the save doesn't mention (or no longer exist) stay in the ash.
+        private void RestoreOfferings(OfferingsSave saved)
+        {
+            if (_shrine == null)
+            {
+                return;
+            }
+
+            _stateBuffer.Clear();
+            for (int i = 0; i < _shrine.Collection.Count; i++)
+            {
+                _stateBuffer.Add(OfferingState.Buried);
+            }
+
+            foreach (OfferingStateSave found in saved.Found)
+            {
+                int index = found != null ? _shrine.Catalog.IndexOf(found.Id) : -1;
+                if (index >= 0 && found.State >= (int)OfferingState.InCollection && found.State <= (int)OfferingState.OnPile)
+                {
+                    _stateBuffer[index] = (OfferingState)found.State;
+                    _shrine.SetPilePosition(index, found.Position);
+                }
+            }
+
+            _shrine.Collection.Restore(_stateBuffer);
+            _shrine.RestoreActiveSets(saved.ActiveSets);
         }
 
         private void CaptureUpgrades(UpgradesSave save)

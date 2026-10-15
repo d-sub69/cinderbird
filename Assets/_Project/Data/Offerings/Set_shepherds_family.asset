@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23d3cfbc58115d247828a1ce7941a289, type: 3}
+  m_Name: Set_shepherds_family
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Offerings.OfferingSet
+  _id: shepherds_family
+  _displayName: The shepherd's family
+  _members:
+  - {fileID: 11400000, guid: ba558960b3537cc479313865828582bb, type: 2}
+  - {fileID: 11400000, guid: 7a94e3e3e3861e54eb5f1e525104455f, type: 2}
+  - {fileID: 11400000, guid: 6bfda7501de43ec48bc7514791e68c1d, type: 2}
+  _bonus: 0
+  _percent: 10

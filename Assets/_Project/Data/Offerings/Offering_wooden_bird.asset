@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 549f69cc8fc1b564fbfcc17892bc985f, type: 3}
+  m_Name: Offering_wooden_bird
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Offerings.OfferingDefinition
+  _id: wooden_bird
+  _displayName: Carved wooden bird
+  _lore: A shepherd whittled it the night the phoenix last sang.
+  _sellValue: 40
+  _color: {r: 0.72, g: 0.5, b: 0.3, a: 1}
+  _placement:
+    _angle: 180
+    _outward: 0.9
+    _depth: 0.3
+  _model: {fileID: 7348021671813202911, guid: bba862afbf60b2c4486b5b7b190e5507, type: 3}
+  _size: 0.22

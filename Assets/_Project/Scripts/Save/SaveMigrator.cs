@@ -11,8 +11,8 @@ namespace Cinderbird.Save
         /// <returns>The same save in the current layout.</returns>
         public static string Upgrade(string json, int fromVersion)
         {
-            // 1 → 2 added loose embers to the terrain save, 2 → 3 the upgrades. Nothing to rewrite: a missing key keeps its
-            // default (no loose embers, nothing bought).
+            // 1 → 2 added loose embers to the terrain save, 2 → 3 the upgrades, 3 → 4 the offerings. Nothing to rewrite: a
+            // missing key keeps its default (no loose embers, nothing bought, nothing found).
             return json;
         }
     }

@@ -4,6 +4,7 @@ using System.IO;
 using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
+using Cinderbird.Offerings;
 using Cinderbird.Save;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
@@ -105,6 +106,23 @@ namespace Cinderbird.Tests.PlayMode
             pile.Dig(top + new Vector3(0.6f, -0.2f, 0f), 0.4f, new List<Ember>(), null, 0.25f, 2f);
 
             Assert.That(dugCount, Is.EqualTo(1), "the first scoop's hole was completed before the second dig");
+        }
+
+        [Test]
+        public void DiggingWhereAnOfferingLies_UncoversIt_AndOnlyPickingItUpKeepsIt()
+        {
+            Shrine shrine = Object.FindAnyObjectByType<Shrine>();
+            VoxelTerrain pile = Object.FindAnyObjectByType<VoxelTerrain>();
+            Assert.That(shrine, Is.Not.Null, "Main has the shrine (run Setup step 2C)");
+            Assert.That(pile.Terrain.Finds.Count, Is.EqualTo(shrine.Catalog.Count), "every offering is buried in a fresh game");
+            BuriedFind first = pile.Terrain.Finds[0];
+
+            pile.Dig(pile.transform.TransformPoint(first.Position), 0.3f, new List<Ember>());
+
+            Assert.That(shrine.Collection.StateOf(first.Id), Is.EqualTo(OfferingState.OnPile), "uncovered, not taken");
+            Assert.That(Object.FindAnyObjectByType<PileOffering>(), Is.Not.Null, "it lies there to be picked up");
+            Assert.That(shrine.PickUp(first.Id), Is.True);
+            Assert.That(shrine.Collection.StateOf(first.Id), Is.EqualTo(OfferingState.InCollection));
         }
 
         [Test]

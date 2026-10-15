@@ -242,6 +242,49 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void Finds_AreUncoveredByADigThatReachesThem_OnlyOnce_AndNotTaken()
+        {
+            AshTerrain terrain = CreateTerrain();
+            Vector3 center = new Vector3(0f, 0.8f, 0f);
+            terrain.PlaceFind(0, center + Vector3.right * 0.55f);
+            terrain.PlaceFind(1, center + Vector3.right * 1.2f);
+            List<Ember> taken = new List<Ember>();
+            List<BuriedFind> uncovered = new List<BuriedFind>();
+
+            terrain.Dig(center, 0.4f, taken, null, null, 0.25f, uncovered);
+            terrain.Dig(center, 0.4f, taken, null, null, 0.25f, uncovered);
+
+            Assert.That(uncovered.Count, Is.EqualTo(1), "just beyond the dig, within its reach");
+            Assert.That(uncovered[0].Id, Is.EqualTo(0));
+            Assert.That(uncovered[0].Position, Is.EqualTo(center + Vector3.right * 0.55f), "where it lay: not carried off");
+            Assert.That(terrain.Finds.Count, Is.EqualTo(1));
+            Assert.That(terrain.Finds[0].Id, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RemoveFind_TakesItOutOfTheAsh()
+        {
+            AshTerrain terrain = CreateTerrain();
+            terrain.PlaceFind(3, new Vector3(0f, 0.5f, 0f));
+
+            terrain.RemoveFind(3);
+
+            Assert.That(terrain.Finds, Is.Empty);
+        }
+
+        [Test]
+        public void NaturalSurfaceHeight_IsTheGeneratedSurfaceThere()
+        {
+            AshTerrain terrain = CreateTerrain();
+
+            float middle = terrain.NaturalSurfaceHeightAt(Vector3.zero);
+            float edge = terrain.NaturalSurfaceHeightAt(new Vector3(1.5f, 0f, 0f));
+
+            Assert.That(middle, Is.GreaterThan(edge), "a mountain: highest in the middle");
+            Assert.That(terrain.World.SampleDensity(new Vector3(0f, middle - 0.3f, 0f)), Is.GreaterThan(0f), "ash just below it");
+        }
+
+        [Test]
         public void Dig_TakesLooseEmbersInsideIt()
         {
             AshTerrain terrain = CreateTerrain();

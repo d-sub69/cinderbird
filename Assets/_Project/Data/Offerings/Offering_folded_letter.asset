@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 549f69cc8fc1b564fbfcc17892bc985f, type: 3}
+  m_Name: Offering_folded_letter
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Offerings.OfferingDefinition
+  _id: folded_letter
+  _displayName: Folded letter
+  _lore: '"Keep the fire warm until I''m home."'
+  _sellValue: 30
+  _color: {r: 0.92, g: 0.9, b: 0.82, a: 1}
+  _placement:
+    _angle: 108
+    _outward: 0.55
+    _depth: 1.5
+  _model: {fileID: 9123341277662430363, guid: 5548f4ab6df6b1f4da200eab37abb5ab, type: 3}
+  _size: 0.16

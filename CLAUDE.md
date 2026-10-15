@@ -47,6 +47,7 @@ Assets/
       Sifting/         sieve, shake logic, dust FX hooks
       Embers/          ember data, spawning, tiers
       Nest/            nest, feeding, heat
+      Offerings/       offerings found in the ash, the shrine shelf, set bonuses
       Economy/         currencies, costs (later)
       UI/              HUD and menus
       Save/            persistence: save file, autosave, terrain snapshots
@@ -147,7 +148,7 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 ## Definition of done — Phase 2
 - [x] Heat levels 1–3 work and open layer 2 by the design rule; the HUD shows where I stand
 - [x] I can buy the 3 sieves and the mesh in the shop and feel the difference
-- [ ] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
+- [x] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
 - [ ] Shaking on the beat earns the Clean Sift bonus
 - [ ] A salamander cousin and Warm Wind help me
 - [ ] The phoenix silhouette grows in the fire and the valley starts to thaw

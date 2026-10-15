@@ -6,6 +6,7 @@ using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
+using Cinderbird.Offerings;
 using Cinderbird.Player;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
@@ -55,6 +56,8 @@ namespace Cinderbird.Save
         [SerializeField] private PauseController _pause;
         [Tooltip("Optional: saves the upgrades bought in the shop.")]
         [SerializeField] private Upgrades _upgrades;
+        [Tooltip("Optional: saves the offerings found and where they are.")]
+        [SerializeField] private Shrine _shrine;
 
         [Header("Debug keys")]
         [SerializeField] private InputActionReference _saveAction;
@@ -123,7 +126,7 @@ namespace Cinderbird.Save
 
             string folder = _testFolder ?? Path.Combine(Application.persistentDataPath, _settings.FolderName);
             _slot = new SaveSlot(new SaveFileStore(folder, _settings.FileName));
-            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades);
+            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades, _shrine);
         }
 
         private void OnEnable()
@@ -145,6 +148,11 @@ namespace Cinderbird.Save
             {
                 _upgrades.Levels.Changed += OnUpgradeChanged;
             }
+
+            if (_shrine != null)
+            {
+                _shrine.Collection.Changed += OnOfferingChanged;
+            }
         }
 
         private void OnDisable()
@@ -158,6 +166,11 @@ namespace Cinderbird.Save
             if (_upgrades != null)
             {
                 _upgrades.Levels.Changed -= OnUpgradeChanged;
+            }
+
+            if (_shrine != null)
+            {
+                _shrine.Collection.Changed -= OnOfferingChanged;
             }
         }
 
@@ -222,6 +235,15 @@ namespace Cinderbird.Save
 
         // A purchase is saved right away: Glow was spent, and a crash must not lose what it bought.
         private void OnUpgradeChanged(string id)
+        {
+            if (!_applying)
+            {
+                _saveRequested = true;
+            }
+        }
+
+        // A found, placed or sold offering is worth saving soon too.
+        private void OnOfferingChanged(int index)
         {
             if (!_applying)
             {

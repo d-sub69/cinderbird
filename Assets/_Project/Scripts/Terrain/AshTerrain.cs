@@ -27,6 +27,7 @@ namespace Cinderbird.Terrain
         // Generated surface height per sample column, in samples (x + z * SamplesX).
         private float[] _naturalSurface;
         private readonly List<int> _chunkScratch = new List<int>();
+        private readonly List<BuriedFind> _finds = new List<BuriedFind>();
 
         public AshTerrain(VoxelWorld world, int layerCount = 1)
         {
@@ -238,9 +239,9 @@ namespace Cinderbird.Terrain
         /// <param name="exposedEmbers">If given, embers the dig only grazed are moved here (see <see cref="StartDig"/>).</param>
         /// <param name="exposeMargin">How far beyond the dug sphere an ember counts as grazed (meters).</param>
         public DigResult Dig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer = null,
-            List<LooseEmber> exposedEmbers = null, float exposeMargin = 0f)
+            List<LooseEmber> exposedEmbers = null, float exposeMargin = 0f, List<BuriedFind> uncoveredFinds = null)
         {
-            DigResult result = StartDig(center, radius, extractedEmbers, removedByLayer, exposedEmbers, exposeMargin);
+            DigResult result = StartDig(center, radius, extractedEmbers, removedByLayer, exposedEmbers, exposeMargin, uncoveredFinds);
             CarveDig(center, radius);
             return result;
         }
@@ -257,8 +258,12 @@ namespace Cinderbird.Terrain
         /// for the caller to add as loose embers once the hole is open (<see cref="AddLoose(Ember, Vector3)"/>), each
         /// with where it lay (<see cref="LooseEmber.CameFrom"/>; its id is not set yet). Null leaves them buried.
         /// </param>
+        /// <param name="uncoveredFinds">
+        /// If given, buried finds (offerings) the dig reaches (within its radius plus <paramref name="exposeMargin"/>) are moved
+        /// here: they are uncovered, not taken, and lie where they were for the player to pick up.
+        /// </param>
         public DigResult StartDig(Vector3 center, float radius, List<Ember> extractedEmbers, float[] removedByLayer,
-            List<LooseEmber> exposedEmbers, float exposeMargin)
+            List<LooseEmber> exposedEmbers, float exposeMargin, List<BuriedFind> uncoveredFinds = null)
         {
             DigResult measured = SphereDigBrush.Measure(World, center, radius, Locks, removedByLayer);
             float reach = exposedEmbers != null ? radius + Mathf.Max(0f, exposeMargin) : radius;
@@ -300,6 +305,11 @@ namespace Cinderbird.Terrain
             }
 
             emberCount += TakeLooseWithin(center, radius, extractedEmbers);
+            if (uncoveredFinds != null)
+            {
+                UncoverFindsWithin(center, radius + Mathf.Max(0f, exposeMargin), uncoveredFinds);
+            }
+
             TotalAshVolume -= measured.RemovedVolume;
             return new DigResult(measured.RemovedVolume, emberCount, measured.BlockedLayer);
         }
@@ -330,6 +340,58 @@ namespace Cinderbird.Terrain
             Vector2 edge = sideways * (holeRadius / distance);
             spot = new Vector3(digCenter.x + edge.x, ember.y, digCenter.z + edge.y);
             return true;
+        }
+
+        /// <summary>Buried finds (offerings) still in the ash.</summary>
+        public IReadOnlyList<BuriedFind> Finds => _finds;
+
+        /// <summary>Buries a find (an offering) at a spot; it takes the ash layer there.</summary>
+        public void PlaceFind(int id, Vector3 position)
+        {
+            Vector3 sample = (position - World.Origin) / World.CellSize;
+            int x = Mathf.Clamp(Mathf.RoundToInt(sample.x), 0, World.SamplesX - 1);
+            int y = Mathf.Clamp(Mathf.RoundToInt(sample.y), 0, World.SamplesY - 1);
+            int z = Mathf.Clamp(Mathf.RoundToInt(sample.z), 0, World.SamplesZ - 1);
+            RemoveFind(id);
+            _finds.Add(new BuriedFind(id, position, World.GetLayer(x, y, z)));
+        }
+
+        /// <summary>Takes a find out of the ash for good (e.g. a save says it was found already).</summary>
+        public void RemoveFind(int id)
+        {
+            for (int i = _finds.Count - 1; i >= 0; i--)
+            {
+                if (_finds[i].Id == id)
+                {
+                    _finds.RemoveAt(i);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Height of the freshly generated surface over a terrain-local spot (x and z used), in local units, for placing
+        /// things at a depth below it; NaN before <see cref="Generate"/>.
+        /// </summary>
+        public float NaturalSurfaceHeightAt(Vector3 position)
+        {
+            Vector3 sample = (position - World.Origin) / World.CellSize;
+            int x = Mathf.Clamp(Mathf.RoundToInt(sample.x), 0, World.SamplesX - 1);
+            int z = Mathf.Clamp(Mathf.RoundToInt(sample.z), 0, World.SamplesZ - 1);
+            return World.Origin.y + NaturalSurfaceSample(x, z) * World.CellSize;
+        }
+
+        private void UncoverFindsWithin(Vector3 center, float radius, List<BuriedFind> output)
+        {
+            float radiusSquared = radius * radius;
+            for (int i = _finds.Count - 1; i >= 0; i--)
+            {
+                BuriedFind find = _finds[i];
+                if ((find.Position - center).sqrMagnitude <= radiusSquared && Locks.IsUnlocked(find.Layer))
+                {
+                    output.Add(find);
+                    _finds.RemoveAt(i);
+                }
+            }
         }
 
         /// <summary>Embers lying loose on a surface (not buried): uncovered by digs, or dropped. Order may change.</summary>

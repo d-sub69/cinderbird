@@ -52,7 +52,7 @@ namespace Cinderbird.Nest
             }
 
             CacheTierValues();
-            _intake = new NestIntake(_wallet.Currencies, _glowByTier, _heatByTier);
+            _intake = new NestIntake(_wallet.Currencies, _glowByTier, _heatByTier, _wallet.Bonuses);
         }
 
         private void OnEnable()
