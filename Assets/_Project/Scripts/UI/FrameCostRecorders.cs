@@ -6,7 +6,7 @@ namespace Cinderbird.UI
 {
     /// <summary>
     /// Reads, frame by frame, how long the game's own profiler markers took (dig, meshing, colliders, settling,
-    /// glimmers, saving) and Unity's garbage collection, so a slow frame can say what it was busy with. Values are for
+    /// glimmers, saving, the helper's searches) and Unity's garbage collection, so a slow frame can say what it was busy with. Values are for
     /// the last finished frame; markers not recorded in this build read 0. Dispose when done.
     /// </summary>
     public sealed class FrameCostRecorders : IDisposable
@@ -14,10 +14,10 @@ namespace Cinderbird.UI
         private static readonly string[] MarkerNames =
         {
             "Cinderbird.Dig", "Cinderbird.Mesh", "Cinderbird.Colliders", "Cinderbird.Settle", "Cinderbird.SettleWait",
-            "Cinderbird.Glimmers", "Cinderbird.LooseEmbers", "Cinderbird.Save",
+            "Cinderbird.Glimmers", "Cinderbird.LooseEmbers", "Cinderbird.Save", "Cinderbird.Helper",
         };
 
-        private static readonly string[] ShortNames = { "dig", "mesh", "colliders", "settle", "settle_wait", "glimmers", "loose", "save" };
+        private static readonly string[] ShortNames = { "dig", "mesh", "colliders", "settle", "settle_wait", "glimmers", "loose", "save", "helper" };
 
         private readonly ProfilerRecorder[] _markers = new ProfilerRecorder[MarkerNames.Length];
         private ProfilerRecorder _gc;

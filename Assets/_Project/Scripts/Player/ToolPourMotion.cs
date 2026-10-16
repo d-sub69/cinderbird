@@ -7,9 +7,12 @@ namespace Cinderbird.Player
     /// <summary>
     /// Tilts a held tool forward when it's poured, or wobbles it side to side when a pour is refused.
     /// Rotates its own pivot (placed at the tool's front rim) so it never fights other motion on the tool.
+    /// The player's tools play it on their <see cref="PourController"/>'s pours; a helper's sieve has no controller and
+    /// plays it from code (<see cref="Play"/>).
     /// </summary>
     public sealed class ToolPourMotion : MonoBehaviour
     {
+        [Tooltip("Optional: plays on this controller's pours. Empty for a tool played from code (a helper's).")]
         [SerializeField] private PourController _controller;
         [Tooltip("Only pours of this tool animate this object.")]
         [SerializeField] private ToolDefinition _tool;
@@ -18,12 +21,18 @@ namespace Cinderbird.Player
         [SerializeField] private Transform _pivot;
 
         private Quaternion _restRotation;
-        private float _startTime = -1f;
+        private float _elapsed = -1f;
         private bool _refusing;
+        private float _timeScale = 1f;
+
+        /// <summary>Seconds a pour's tip takes at the current time scale.</summary>
+        public float TipDuration => _settings != null ? _settings.TipDuration / _timeScale : 0f;
+
+        public bool IsPlaying => _elapsed >= 0f;
 
         private void Awake()
         {
-            if (_controller == null || _tool == null || _settings == null || _pivot == null)
+            if (_settings == null || _pivot == null)
             {
                 Debug.LogError($"{nameof(ToolPourMotion)} on '{name}' has unassigned references.", this);
                 enabled = false;
@@ -46,35 +55,47 @@ namespace Cinderbird.Player
 
         private void OnDisable()
         {
-            if (_controller == null)
+            if (_controller != null)
             {
-                return;
+                _controller.Poured -= OnPoured;
+                _controller.PourRefused -= OnPourRefused;
             }
-
-            _controller.Poured -= OnPoured;
-            _controller.PourRefused -= OnPourRefused;
 
             // Stowed mid-animation: come back upright next time it's drawn.
-            if (_pivot != null && _startTime >= 0f)
+            if (_pivot != null && _elapsed >= 0f)
             {
                 _pivot.localRotation = _restRotation;
-                _startTime = -1f;
+                _elapsed = -1f;
             }
+        }
+
+        /// <summary>Plays the tip (or, when <paramref name="refusing"/>, the "no" wobble) from the start.</summary>
+        public void Play(bool refusing)
+        {
+            _refusing = refusing;
+            _elapsed = 0f;
+        }
+
+        /// <summary>Plays faster (above 1) or slower: a helper's pace upgrade shortens her pour.</summary>
+        public void SetTimeScale(float scale)
+        {
+            _timeScale = Mathf.Max(0.01f, scale);
         }
 
         private void LateUpdate()
         {
-            if (_startTime < 0f)
+            if (_elapsed < 0f)
             {
                 return;
             }
 
+            _elapsed += Time.deltaTime * _timeScale;
             float duration = _refusing ? _settings.RefuseDuration : _settings.TipDuration;
-            float progress = (Time.time - _startTime) / duration;
+            float progress = _elapsed / duration;
             if (progress >= 1f)
             {
                 _pivot.localRotation = _restRotation;
-                _startTime = -1f;
+                _elapsed = -1f;
                 return;
             }
 
@@ -108,12 +129,6 @@ namespace Cinderbird.Player
             {
                 Play(true);
             }
-        }
-
-        private void Play(bool refusing)
-        {
-            _refusing = refusing;
-            _startTime = Time.time;
         }
     }
 }

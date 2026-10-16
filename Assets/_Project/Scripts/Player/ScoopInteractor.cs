@@ -25,6 +25,8 @@ namespace Cinderbird.Player
         [SerializeField] private TestModeSettings _testMode;
         [Tooltip("Optional: embers lying loose can be picked up with a click.")]
         [SerializeField] private LooseEmberView _looseEmbers;
+        [Tooltip("Optional: while something else owns the buttons (sending a helper), this leaves them alone.")]
+        [SerializeField] private InputFocus _focus;
 
         private readonly List<Ember> _extractedEmbers = new List<Ember>();
         private readonly ComponentLookup<VoxelTerrain> _terrains = new ComponentLookup<VoxelTerrain>();
@@ -83,7 +85,7 @@ namespace Cinderbird.Player
             UpdateTarget();
 
             // While the cursor is free, the click is for re-locking it, not for digging.
-            if (Cursor.lockState != CursorLockMode.Locked || !_scoopAction.action.WasPressedThisFrame())
+            if (Cursor.lockState != CursorLockMode.Locked || !_scoopAction.action.WasPressedThisFrame() || (_focus != null && _focus.IsTaken))
             {
                 return;
             }

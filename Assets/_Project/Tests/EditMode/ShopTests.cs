@@ -18,6 +18,7 @@ namespace Cinderbird.Tests.EditMode
 
             public string Id { get; }
             public int MaxLevel { get; }
+            public string RequiresId { get; set; } = string.Empty;
             private int BaseCost { get; }
             private float Growth { get; }
 
@@ -33,6 +34,25 @@ namespace Cinderbird.Tests.EditMode
             currencies.Add(glow, 0);
             levels = new UpgradeLevels();
             return new Shop(currencies, levels);
+        }
+
+        [Test]
+        public void RequiredUpgradeNotBought_IsLocked_ThenOnSale()
+        {
+            Shop shop = CreateShop(1000, out Currencies currencies, out UpgradeLevels levels);
+            FakeUpgrade helper = new FakeUpgrade("helper", 1, 100, 1f);
+            FakeUpgrade pace = new FakeUpgrade("pace", 2, 50, 1f) { RequiresId = "helper" };
+
+            Assert.That(shop.IsAvailable(pace), Is.False);
+            Assert.That(shop.CanAfford(pace), Is.False);
+            Assert.That(shop.TryBuy(pace), Is.EqualTo(Purchase.Locked));
+            Assert.That(currencies.Glow, Is.EqualTo(1000), "nothing spent");
+
+            Assert.That(shop.TryBuy(helper), Is.EqualTo(Purchase.Bought));
+
+            Assert.That(shop.IsAvailable(pace), Is.True);
+            Assert.That(shop.TryBuy(pace), Is.EqualTo(Purchase.Bought));
+            Assert.That(levels.LevelOf("pace"), Is.EqualTo(1));
         }
 
         [Test]

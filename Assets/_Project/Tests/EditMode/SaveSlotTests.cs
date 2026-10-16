@@ -271,5 +271,48 @@ namespace Cinderbird.Tests.EditMode
             Assert.That(file.Version, Is.EqualTo(SaveFile.CurrentVersion));
             Assert.That(file.Upgrades.Levels, Is.Empty);
         }
+
+        [Test]
+        public void Helper_RoundTrips()
+        {
+            SaveFile file = CreateFile(5);
+            file.Helper.Mode = 1;
+            file.Helper.HasSpot = true;
+            file.Helper.Spot = new Vector3(2f, 1f, 20f);
+            file.Helper.SpotLayer = 1;
+            file.Helper.SpotPending = true;
+            file.Helper.HasPose = true;
+            file.Helper.Position = new Vector3(1f, 0f, 20f);
+            file.Helper.Yaw = 90f;
+            file.Helper.Sieve.AshVolume = 0.02f;
+            file.Helper.Sieve.Embers.Add(new EmberRecord(new Ember(new Vector3(1f, 2f, 3f), 2, 1)));
+
+            _slot.Write(file, null);
+            _slot.TryLoad(out SaveFile loaded, out _, out _);
+
+            Assert.That(loaded.Helper.Mode, Is.EqualTo(1));
+            Assert.That(loaded.Helper.Spot, Is.EqualTo(new Vector3(2f, 1f, 20f)));
+            Assert.That(loaded.Helper.SpotLayer, Is.EqualTo(1));
+            Assert.That(loaded.Helper.SpotPending, Is.True);
+            Assert.That(loaded.Helper.Position, Is.EqualTo(new Vector3(1f, 0f, 20f)));
+            Assert.That(loaded.Helper.Sieve.AshVolume, Is.EqualTo(0.02f).Within(1e-6f));
+            Assert.That(loaded.Helper.Sieve.Embers[0].ToEmber().TierIndex, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Version4Save_StillLoads_WithNoHelperState()
+        {
+            string json = SaveSerializer.ToJson(CreateFile(5))
+                .Replace($"\"_version\": {SaveFile.CurrentVersion}", "\"_version\": 4")
+                .Replace("\"_helper\"", "\"_unusedHelper\"");
+
+            bool parsed = SaveSerializer.TryParse(json, out SaveFile file, out string error);
+
+            Assert.That(json, Does.Contain("\"_version\": 4"), "the test really made a version 4 save");
+            Assert.That(parsed, Is.True, error);
+            Assert.That(file.Version, Is.EqualTo(SaveFile.CurrentVersion));
+            Assert.That(file.Helper.HasPose, Is.False);
+            Assert.That(file.Helper.Sieve.Embers, Is.Empty);
+        }
     }
 }

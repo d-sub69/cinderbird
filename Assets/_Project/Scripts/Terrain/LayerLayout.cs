@@ -33,6 +33,20 @@ namespace Cinderbird.Terrain
 
         public int LayerCount => _bandStartDepths.Length + 1;
 
+        /// <summary>Number of shell layers (all but the pocket).</summary>
+        public int ShellCount => _bandStartDepths.Length;
+
+        /// <summary>Depth below the original surface where a shell layer starts (meters).</summary>
+        public float BandStartDepth(int layer)
+        {
+            return _bandStartDepths[Mathf.Clamp(layer, 0, _bandStartDepths.Length - 1)];
+        }
+
+        public Vector3 PocketCenter => _pocketCenter;
+
+        /// <summary>Radius of the pocket layer; 0 when there is none.</summary>
+        public float PocketRadius => _pocketRadiusSquared > 0f ? Mathf.Sqrt(_pocketRadiusSquared) : 0f;
+
         /// <param name="surfaceHeight">Height of the original surface above this position's column.</param>
         public byte LayerAt(Vector3 position, float surfaceHeight)
         {

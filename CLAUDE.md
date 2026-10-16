@@ -28,8 +28,11 @@ Phase 2 builds a short, complete slice of the game from the design doc, one comm
   and the mesh (catch more embers); upgrade levels saved
 - 2C. 5 offerings with lore, found in the ash; sell or place on the shrine shelf; a shelf set bonus
 - 2D. Rhythm shake: the nest pulses; shaking on the beat builds the Clean Sift bonus up to ×1.5 Glow, never
-  punished off-beat
-- 2E. One helper: a salamander cousin sifting a patch slowly while the game is open
+  punished off-beat. **Deferred** (skipped for now at Art's call; to be picked up later)
+- 2E. One helper: Sally, a salamander who walks, scoops, shakes and feeds the nest like the player (her own copy of
+  the sieve, A* on a walk grid, jumps onto ledges). Hired and upgraded in the shop (pace, sieve size). Works on her
+  own (nearest ash of the outermost open layer) or from a spot the player marks with a green circle (she walks there
+  first, then works that layer); outer layers first; waits by the shop and says why when she can't work. Talk with E
 - 2F. One power: Warm Wind (Heat 1), blows loose ash off an area to expose embers
 - 2G. Phoenix silhouette in the nest fire (stages 1–3) and the first valley-thaw stage (placeholder art)
 
@@ -48,6 +51,7 @@ Assets/
       Embers/          ember data, spawning, tiers
       Nest/            nest, feeding, heat
       Offerings/       offerings found in the ash, the shrine shelf, set bonuses
+      Helpers/         Sally the helper: work rules, walk grid and A*, mover, animation, sending her to a spot
       Economy/         currencies, costs (later)
       UI/              HUD and menus
       Save/            persistence: save file, autosave, terrain snapshots

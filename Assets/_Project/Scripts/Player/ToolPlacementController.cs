@@ -22,6 +22,8 @@ namespace Cinderbird.Player
         [SerializeField] private InputActionReference _pickUpAction;
         [Tooltip("Layers the placement ray can land on.")]
         [SerializeField] private LayerMask _groundMask = ~0;
+        [Tooltip("Optional: while something else owns the buttons (sending a helper), this leaves them alone.")]
+        [SerializeField] private InputFocus _focus;
         [SerializeField] private Color _validGhostColor = new Color(0.3f, 1f, 0.4f, 0.35f);
         [SerializeField] private Color _invalidGhostColor = new Color(1f, 0.3f, 0.3f, 0.35f);
 
@@ -85,7 +87,7 @@ namespace Cinderbird.Player
         {
             UpdatePlacementPreview();
 
-            if (Cursor.lockState != CursorLockMode.Locked)
+            if (Cursor.lockState != CursorLockMode.Locked || (_focus != null && _focus.IsTaken))
             {
                 return;
             }

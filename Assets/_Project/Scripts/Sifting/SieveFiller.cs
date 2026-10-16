@@ -16,6 +16,7 @@ namespace Cinderbird.Sifting
         [SerializeField] private SieveSettings _settings;
 
         private readonly ScoopTransfer _transfer = new ScoopTransfer();
+        private float _durationScale = 1f;
 
         /// <summary>Fired when a pour starts, with the ash volume and where in the world it was dug.</summary>
         public event Action<float, Vector3> FillStarted;
@@ -28,7 +29,7 @@ namespace Cinderbird.Sifting
         public IReadOnlyList<Ember> IncomingEmbers => _transfer.Embers;
 
         /// <summary>Seconds a scooped load takes to pour in; the hole in the pile opens over the same time.</summary>
-        public float PourDuration => _settings != null ? _settings.FillDuration : 0f;
+        public float PourDuration => _settings != null ? _settings.FillDuration * _durationScale : 0f;
         public float IncomingProgress => _transfer.Progress;
         public Color IncomingAshColor => _transfer.AshColor;
         public Color IncomingDustColor => _transfer.DustColor;
@@ -42,6 +43,12 @@ namespace Cinderbird.Sifting
             }
         }
 
+        /// <summary>Pours take this share of their usual time: a helper's pace upgrade shortens hers.</summary>
+        public void SetDurationScale(float scale)
+        {
+            _durationScale = Mathf.Max(0.01f, scale);
+        }
+
         /// <param name="digPoint">World position the ash came from, where the pour starts.</param>
         /// <returns>False if a pour is already running.</returns>
         public bool TryBegin(float volume, List<Ember> embers, Vector3 digPoint)
@@ -53,7 +60,7 @@ namespace Cinderbird.Sifting
         /// <param name="dustColor">Color of the dust it sheds.</param>
         public bool TryBegin(float volume, List<Ember> embers, Vector3 digPoint, Color ashColor, Color dustColor)
         {
-            if (!_transfer.TryBegin(volume, embers, _settings.FillDuration, ashColor, dustColor))
+            if (!_transfer.TryBegin(volume, embers, PourDuration, ashColor, dustColor))
             {
                 return false;
             }

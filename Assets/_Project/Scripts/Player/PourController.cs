@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Cinderbird.Core;
 using Cinderbird.Embers;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -15,6 +16,8 @@ namespace Cinderbird.Player
         [SerializeField] private ToolBelt _toolBelt;
         [SerializeField] private PlayerInteractor _interactor;
         [SerializeField] private InputActionReference _pourAction;
+        [Tooltip("Optional: while something else owns the buttons (sending a helper), this leaves them alone.")]
+        [SerializeField] private InputFocus _focus;
 
         private readonly List<Ember> _moved = new List<Ember>();
 
@@ -46,7 +49,7 @@ namespace Cinderbird.Player
 
         private void Update()
         {
-            if (Cursor.lockState != CursorLockMode.Locked || !_pourAction.action.WasPressedThisFrame() || !HasTarget)
+            if (Cursor.lockState != CursorLockMode.Locked || !_pourAction.action.WasPressedThisFrame() || !HasTarget || (_focus != null && _focus.IsTaken))
             {
                 return;
             }

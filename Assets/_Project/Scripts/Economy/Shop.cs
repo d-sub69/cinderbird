@@ -14,6 +14,12 @@ namespace Cinderbird.Economy
             _levels = levels ?? throw new ArgumentNullException(nameof(levels));
         }
 
+        /// <summary>Whether it is on sale: whatever it requires has been bought.</summary>
+        public bool IsAvailable(IUpgrade upgrade)
+        {
+            return string.IsNullOrEmpty(upgrade.RequiresId) || _levels.LevelOf(upgrade.RequiresId) > 0;
+        }
+
         public bool IsMaxed(IUpgrade upgrade)
         {
             return _levels.LevelOf(upgrade.Id) >= upgrade.MaxLevel;
@@ -28,11 +34,16 @@ namespace Cinderbird.Economy
         public bool CanAfford(IUpgrade upgrade)
         {
             int price = NextPrice(upgrade);
-            return price >= 0 && _currencies.Glow >= price;
+            return price >= 0 && IsAvailable(upgrade) && _currencies.Glow >= price;
         }
 
         public Purchase TryBuy(IUpgrade upgrade)
         {
+            if (!IsAvailable(upgrade))
+            {
+                return Purchase.Locked;
+            }
+
             if (IsMaxed(upgrade))
             {
                 return Purchase.AlreadyMaxed;

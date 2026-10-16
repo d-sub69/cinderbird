@@ -35,10 +35,8 @@ namespace Cinderbird.Terrain
         private ChunkMeshUpdater _meshes;
         private LayerPalette _palette = new LayerPalette(null, null);
         private AshSettling _settling;
-        // Embers the dig in progress grazed, laid loose when its hole is complete.
-        private readonly List<LooseEmber> _pendingExposed = new List<LooseEmber>();
-        // Finds (offerings) the dig in progress reached, shown lying in the hole once it's complete.
-        private readonly List<BuriedFind> _pendingFinds = new List<BuriedFind>();
+        // Reused per dig: what each dig grazed waits in one of these until its hole is open.
+        private readonly Stack<DigExposure> _exposures = new Stack<DigExposure>();
 
         /// <summary>Fired once <see cref="Build"/> has generated and meshed the mountain.</summary>
         public event Action Built;
@@ -201,20 +199,20 @@ namespace Cinderbird.Terrain
                 return default;
             }
 
-            // Anything still working on the terrain (a scoop draining, a slide settling) writes out first, so a late
-            // write can never overwrite the new hole. That also lays the previous dig's grazed embers.
+            // Anything still settling where this dig lands (a scoop draining, a slide) writes out first, so a late write can
+            // never overwrite the new hole; slides elsewhere carry on. That also lays a finished scoop's grazed embers.
+            Vector3 digCenter = transform.InverseTransformPoint(worldCenter);
             if (_settling != null)
             {
-                _settling.WriteOutNow();
+                _settling.PrepareForDig(digCenter, radius);
             }
 
             using (DigMarker.Auto())
             {
                 long started = TimeMeasure.Now();
-                Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
-                _pendingExposed.Clear();
-                _pendingFinds.Clear();
-                DigResult result = _terrain.StartDig(localCenter, radius, extractedEmbers, removedByLayer, _pendingExposed, exposeMargin, _pendingFinds);
+                Vector3 localCenter = digCenter;
+                DigExposure exposure = _exposures.Count > 0 ? _exposures.Pop() : new DigExposure();
+                DigResult result = _terrain.StartDig(localCenter, radius, extractedEmbers, removedByLayer, exposure.Embers, exposeMargin, exposure.Finds);
                 if (!result.RemovedAnyAsh && result.EmberCount == 0)
                 {
                     if (result.WasBlocked)
@@ -223,7 +221,7 @@ namespace Cinderbird.Terrain
                     }
 
                     // Nothing is carved, so anything grazed is in the open already.
-                    LayExposedEmbers();
+                    LayExposed(exposure);
                     return result;
                 }
 
@@ -231,14 +229,14 @@ namespace Cinderbird.Terrain
                 if (pourSeconds > 0f && Settles)
                 {
                     LastDigMilliseconds = TimeMeasure.MillisecondsSince(started);
-                    _settling.StartScoop(result, localCenter, radius, pourSeconds);
+                    _settling.StartScoop(result, localCenter, radius, pourSeconds, exposure);
                     return result;
                 }
 
                 _terrain.CarveDig(localCenter, radius);
                 _meshes.RebuildDirtyChunks();
                 LastDigMilliseconds = TimeMeasure.MillisecondsSince(started);
-                CompleteScoop(result, localCenter, radius);
+                CompleteScoop(result, localCenter, radius, exposure);
                 if (Settles && result.RemovedAnyAsh)
                 {
                     _settling.SettleAfterDig(localCenter, radius);
@@ -271,9 +269,9 @@ namespace Cinderbird.Terrain
         /// Called once a dig's hole is open (by settling, when a scoop's ash is all out of the pile): lays the embers
         /// it grazed and fires <see cref="Dug"/>.
         /// </summary>
-        public void CompleteScoop(DigResult result, Vector3 localCenter, float radius)
+        public void CompleteScoop(DigResult result, Vector3 localCenter, float radius, DigExposure exposure)
         {
-            LayExposedEmbers();
+            LayExposed(exposure);
             long listenersStarted = TimeMeasure.Now();
             Dug?.Invoke(result, localCenter, radius);
             LastDugListenersMilliseconds = TimeMeasure.MillisecondsSince(listenersStarted);
@@ -316,25 +314,27 @@ namespace Cinderbird.Terrain
 
         // Embers the dig only grazed lie loose once its hole is open: earlier, the walls still draining in would
         // cover them straight away.
-        private void LayExposedEmbers()
+        private void LayExposed(DigExposure exposure)
         {
-            for (int i = 0; i < _pendingExposed.Count; i++)
+            List<LooseEmber> embers = exposure.Embers;
+            for (int i = 0; i < embers.Count; i++)
             {
-                _terrain.AddLoose(_pendingExposed[i].Ember, _pendingExposed[i].CameFrom);
+                _terrain.AddLoose(embers[i].Ember, embers[i].CameFrom);
             }
 
-            bool any = _pendingExposed.Count > 0;
-            _pendingExposed.Clear();
+            bool any = embers.Count > 0;
             if (any)
             {
                 LooseEmbersChanged?.Invoke();
             }
 
-            if (_pendingFinds.Count > 0)
+            if (exposure.Finds.Count > 0)
             {
-                FindsUncovered?.Invoke(_pendingFinds);
-                _pendingFinds.Clear();
+                FindsUncovered?.Invoke(exposure.Finds);
             }
+
+            exposure.Clear();
+            _exposures.Push(exposure);
         }
 
         /// <summary>Opens the next ash layer for digging (Heat levels, or the F4 debug key).</summary>
@@ -388,6 +388,40 @@ namespace Cinderbird.Terrain
         public float SampleDensityAt(Vector3 worldPosition)
         {
             return _terrain != null ? _terrain.World.SampleDensity(transform.InverseTransformPoint(worldPosition)) : VoxelGrid.Air;
+        }
+
+        /// <summary>The top of the ash straight above or below a world position; false where there is none.</summary>
+        public bool TryFindTop(Vector3 worldPosition, out Vector3 top)
+        {
+            top = worldPosition;
+            if (_terrain == null)
+            {
+                return false;
+            }
+
+            Vector3 local = transform.InverseTransformPoint(worldPosition);
+            if (!_terrain.World.TryFindTop(local.x, local.z, out float y))
+            {
+                return false;
+            }
+
+            local.y = y;
+            top = transform.TransformPoint(local);
+            return true;
+        }
+
+        /// <summary>
+        /// What a dig here would take, without digging: ash that can be removed (sealed layers stay) and the first sealed
+        /// layer in the way. Embers are not counted.
+        /// </summary>
+        public DigResult MeasureDig(Vector3 worldCenter, float radius)
+        {
+            if (_terrain == null)
+            {
+                return default;
+            }
+
+            return SphereDigBrush.Measure(_terrain.World, transform.InverseTransformPoint(worldCenter), radius, _terrain.Locks, null);
         }
 
         /// <summary>The dust color of an ash layer, as the sieve shows it.</summary>

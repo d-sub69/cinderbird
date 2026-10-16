@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa3093cda45c67f4d96eff44d4d1e823, type: 3}
+  m_Name: Upgrade_SallySieve
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Economy.TableUpgrade
+  _id: sally_sieve
+  _displayName: Sally's sieve
+  _baseCost: 30
+  _costGrowth: 1.15
+  _requires: {fileID: 11400000, guid: 854048ea07c81ad4984d5be8e0307a2d, type: 2}
+  _levels:
+  - _name: 10 embers
+    _price: 0
+    _value: 10
+    _description: Holds 10 embers before she walks to the nest
+  - _name: 15 embers
+    _price: 300
+    _value: 15
+    _description: Holds 15 embers before she walks to the nest
+  - _name: 20 embers
+    _price: 600
+    _value: 20
+    _description: Holds 20 embers before she walks to the nest
+  - _name: 25 embers
+    _price: 1200
+    _value: 25
+    _description: Holds 25 embers before she walks to the nest

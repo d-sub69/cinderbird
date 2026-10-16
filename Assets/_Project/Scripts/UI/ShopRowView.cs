@@ -33,6 +33,18 @@ namespace Cinderbird.UI
             }
 
             Shop shop = _upgrades.Shop;
+            // Upgrades that need another (a helper's, before she is hired) stay out of the list until then.
+            bool available = shop.IsAvailable(_upgrade);
+            if (gameObject.activeSelf != available)
+            {
+                gameObject.SetActive(available);
+            }
+
+            if (!available)
+            {
+                return;
+            }
+
             int level = _upgrades.LevelOf(_upgrade);
             _name.text = $"{_upgrade.DisplayName}: {_upgrade.LevelName(level)}";
             if (shop.IsMaxed(_upgrade))

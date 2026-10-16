@@ -100,6 +100,24 @@ namespace Cinderbird.Terrain
         public IReadOnlyList<byte> LastSlideLayers => _slideLayers;
 
         /// <summary>
+        /// The columns a settle around a dig loads and may change: within the dig radius plus the reach, one sample inside
+        /// the world's outer border (always air). Known before loading, so several areas can be kept apart.
+        /// </summary>
+        public static SettleArea AreaOf(VoxelWorld world, Vector3 center, float digRadius, float reach)
+        {
+            float cellSize = world.CellSize;
+            Vector3 cell = (center - world.Origin) / cellSize;
+            int cells = Mathf.CeilToInt((digRadius + reach) / cellSize);
+            int cx = Mathf.RoundToInt(cell.x);
+            int cz = Mathf.RoundToInt(cell.z);
+            return new SettleArea(
+                Mathf.Clamp(cx - cells, 1, world.SamplesX - 2),
+                Mathf.Clamp(cz - cells, 1, world.SamplesZ - 2),
+                Mathf.Clamp(cx + cells, 1, world.SamplesX - 2),
+                Mathf.Clamp(cz + cells, 1, world.SamplesZ - 2));
+        }
+
+        /// <summary>
         /// Starts settling the area around a dig: loads every column within the dig radius plus the reach.
         /// Ends any area still settling first, at rest.
         /// </summary>
@@ -115,16 +133,11 @@ namespace Cinderbird.Terrain
             VoxelWorld world = terrain.World;
             float cellSize = world.CellSize;
             Vector3 cell = (center - world.Origin) / cellSize;
-            int reach = Mathf.CeilToInt((digRadius + _parameters.Reach) / cellSize);
-            int cx = Mathf.RoundToInt(cell.x);
-            int cz = Mathf.RoundToInt(cell.z);
-            // The world's outer samples are always air; columns stay one sample inside.
-            _x0 = Mathf.Clamp(cx - reach, 1, world.SamplesX - 2);
-            _z0 = Mathf.Clamp(cz - reach, 1, world.SamplesZ - 2);
-            int x1 = Mathf.Clamp(cx + reach, 1, world.SamplesX - 2);
-            int z1 = Mathf.Clamp(cz + reach, 1, world.SamplesZ - 2);
-            _width = x1 - _x0 + 1;
-            _depth = z1 - _z0 + 1;
+            SettleArea area = AreaOf(world, center, digRadius, _parameters.Reach);
+            _x0 = area.MinX;
+            _z0 = area.MinZ;
+            _width = area.MaxX - _x0 + 1;
+            _depth = area.MaxZ - _z0 + 1;
             EnsureCapacity(_width * _depth);
             _samplesY = world.SamplesY;
             if (_columnDensities == null || _columnDensities.Length != _samplesY)

@@ -6,5 +6,7 @@ namespace Cinderbird.Economy
         Bought,
         NotEnoughGlow,
         AlreadyMaxed,
+        /// <summary>Not on sale yet: what it requires hasn't been bought.</summary>
+        Locked,
     }
 }

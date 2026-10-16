@@ -4,6 +4,7 @@ using System.IO;
 using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
+using Cinderbird.Helpers;
 using Cinderbird.Offerings;
 using Cinderbird.Save;
 using Cinderbird.Sifting;
@@ -148,6 +149,32 @@ namespace Cinderbird.Tests.PlayMode
             Assert.That(upgrades.Wallet.Currencies.Glow, Is.EqualTo(glowBefore - price));
             Assert.That(sieve.Contents.EmberCapacity, Is.EqualTo(sieveUpgrade.TierAt(1).EmberCapacity));
             Assert.That(sieve.Contents.EmberCapacity, Is.GreaterThan(capacityBefore));
+        }
+
+        [UnityTest]
+        public IEnumerator HiredSally_WalksToTheAshAndScoops()
+        {
+            Upgrades upgrades = Object.FindAnyObjectByType<Upgrades>();
+            Sally sally = Object.FindAnyObjectByType<Sally>(FindObjectsInactive.Include);
+            VoxelTerrain pile = Object.FindAnyObjectByType<VoxelTerrain>();
+            Assert.That(sally, Is.Not.Null, "Main has Sally (run Setup step 2E)");
+            UpgradeDefinition hire = upgrades.Find("sally");
+            Assert.That(hire, Is.Not.Null, "the shop sells Sally");
+            Assert.That(sally.IsHired, Is.False);
+            Vector3 start = sally.transform.position;
+            int dug = 0;
+            pile.Dug += (result, center, radius) => dug++;
+
+            upgrades.Levels.SetLevel(hire.Id, 1);
+            float timeout = Time.time + 30f;
+            while (dug == 0 && Time.time < timeout)
+            {
+                yield return null;
+            }
+
+            Assert.That(sally.IsHired, Is.True);
+            Assert.That(dug, Is.GreaterThan(0), "she walked to the ash and scooped it");
+            Assert.That(Vector3.Distance(sally.transform.position, start), Is.GreaterThan(1f), "she walked there");
         }
 
         // The highest ash under the pile's middle, found by a ray from above.

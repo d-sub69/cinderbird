@@ -15,14 +15,19 @@ namespace Cinderbird.Economy
         [SerializeField, Min(0)] private int _baseCost = 30;
         [Tooltip("Each level costs this much more than the one before (the design's default is 1.15).")]
         [SerializeField, Min(1f)] private float _costGrowth = 1.15f;
+        [Tooltip("Optional: on sale only once this upgrade is bought (e.g. a helper's upgrades need the helper).")]
+        [SerializeField] private UpgradeDefinition _requires;
 
         public string Id => _id;
         public string DisplayName => _displayName;
 
+        public string RequiresId => _requires != null ? _requires.Id : string.Empty;
+
         /// <summary>Levels 0 .. MaxLevel; 0 is what the player starts with.</summary>
         public int MaxLevel => Mathf.Max(0, LevelCount - 1);
 
-        public int PriceAt(int level)
+        /// <summary>Glow to go from <paramref name="level"/> to the next; by default base × growth^level.</summary>
+        public virtual int PriceAt(int level)
         {
             return UpgradePrice.At(_baseCost, _costGrowth, level);
         }

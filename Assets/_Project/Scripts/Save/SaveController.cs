@@ -6,6 +6,7 @@ using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Nest;
+using Cinderbird.Helpers;
 using Cinderbird.Offerings;
 using Cinderbird.Player;
 using Cinderbird.Sifting;
@@ -58,6 +59,8 @@ namespace Cinderbird.Save
         [SerializeField] private Upgrades _upgrades;
         [Tooltip("Optional: saves the offerings found and where they are.")]
         [SerializeField] private Shrine _shrine;
+        [Tooltip("Optional: saves the helper (Sally): her mode, where she stands and her sieve.")]
+        [SerializeField] private Sally _sally;
 
         [Header("Debug keys")]
         [SerializeField] private InputActionReference _saveAction;
@@ -126,7 +129,7 @@ namespace Cinderbird.Save
 
             string folder = _testFolder ?? Path.Combine(Application.persistentDataPath, _settings.FolderName);
             _slot = new SaveSlot(new SaveFileStore(folder, _settings.FileName));
-            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades, _shrine);
+            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades, _shrine, _sally);
         }
 
         private void OnEnable()

@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c2c68577d0c29543afbb13cfd7a6092, type: 3}
+  m_Name: HelperSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Helpers.HelperSettings
+  _gridMin: {x: -26, y: 2}
+  _gridSize: {x: 52, y: 64}
+  _cellSize: 0.5
+  _maxSlope: 45
+  _minAshThickness: 0.05
+  _maxSearchCells: 12000
+  _climbCost: 2
+  _canJump: 1
+  _jumpReach: 0.8
+  _maxDrop: 2
+  _walkSpeedFactor: 0.55
+  _waypointRadius: 0.35
+  _turnSmoothTime: 0.15
+  _maxTurnSpeed: 420
+  _faceTolerance: 6
+  _stuckDistance: 0.15
+  _stuckSeconds: 0.8
+  _blockSeconds: 6
+  _maxRepaths: 4
+  _sieveSeconds: 4
+  _surveyStride: 0.5
+  _minAshDepth: 0.15
+  _nearBand: 1.5
+  _scoopDistance: {x: 0.55, y: 1.35}
+  _reachUp: 1.4
+  _reachDown: 1.2
+  _handsHeight: 0.9
+  _retryUnreachableSeconds: 90
+  _idleRecheckSeconds: 2
+  _nestDistance: {x: 0.4, y: 1.6}
+  _homeRadius: 0.75
+  _assignReach: 30
+  _spotRadius: 0.6
+  _maxDistanceFromAsh: 3
+  _validColor: {r: 0.3, g: 1, b: 0.4, a: 0.6}
+  _invalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.6}

@@ -11,5 +11,8 @@ namespace Cinderbird.Economy
 
         /// <summary>Glow to go from <paramref name="level"/> to the next.</summary>
         int PriceAt(int level);
+
+        /// <summary>Id of an upgrade that must be bought (level 1 or more) before this one is on sale; empty for none.</summary>
+        string RequiresId { get; }
     }
 }

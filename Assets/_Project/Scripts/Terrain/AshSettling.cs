@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cinderbird.Core;
 using Unity.Profiling;
 using UnityEngine;
@@ -6,16 +7,17 @@ using UnityEngine;
 namespace Cinderbird.Terrain
 {
     /// <summary>
-    /// Thin adapter that runs <see cref="AshSettler"/>: steps on a worker thread and, many times a second, writes
-    /// the result into the terrain on the main thread, so ash is seen to move. Driven by <see cref="VoxelTerrain"/>:
+    /// Thin adapter that runs ash settling (<see cref="AshSettler"/>) in several areas at once: each dig gets its own
+    /// <see cref="SettleJob"/>, all stepped on one worker thread and, many times a second, written into the terrain on the
+    /// main thread, so ash is seen to move. Driven by <see cref="VoxelTerrain"/>:
     /// <list type="bullet">
     /// <item>A scoop (<see cref="StartScoop"/>) is one simulation with its slide: the scooped ash drains out of the
     /// pile over the pour time while the surrounding ash sinks into the hole as it forms.</item>
     /// <item>Any other dig settles afterwards (<see cref="SettleAfterDig"/>).</item>
     /// </list>
-    /// A new dig first writes out what is running (<see cref="WriteOutNow"/>), scoop ash fully taken (its own
-    /// settling picks the slide up), so a late write can never overwrite a fresh hole. Freezes while the game is
-    /// paused (scaled time).
+    /// Before a dig changes the terrain, <see cref="PrepareForDig"/> finishes only the areas it touches (scoop ash fully
+    /// taken), so a late write can never overwrite a fresh hole, while slides elsewhere (a helper's patch) carry on.
+    /// The main thread only touches the terrain while the worker is idle. Freezes while the game is paused.
     /// </summary>
     [RequireComponent(typeof(VoxelTerrain))]
     public sealed class AshSettling : MonoBehaviour
@@ -23,53 +25,43 @@ namespace Cinderbird.Terrain
         private static readonly ProfilerMarker SettleMarker = new ProfilerMarker("Cinderbird.Settle");
         private static readonly ProfilerMarker WaitMarker = new ProfilerMarker("Cinderbird.SettleWait");
 
+        // Most areas settling at once; a new one beyond this finishes the oldest first.
+        private const int MaxAreas = 4;
+
         [SerializeField] private SettleSettings _settings;
         [Tooltip("Optional: puffs of dust where ash runs. World-space simulation.")]
         [SerializeField] private ParticleSystem _dust;
 
+        private readonly List<SettleJob> _jobs = new List<SettleJob>();
+        private readonly Stack<SettleJob> _pool = new Stack<SettleJob>();
         private VoxelTerrain _terrain;
-        private AshSettler _settler;
+        private SettleParameters _parameters;
         private WorkerThread _worker;
         private bool _working;
         private float _nextUpdateTime;
 
-        // A plain dig waiting to be settled from the next Update.
-        private bool _beginPending;
-        private Vector3 _pendingCenter;
-        private float _pendingRadius;
-
-        // The scoop being drained, until its ash is all out and its Dug event has fired.
-        private bool _scoopActive;
-        private DigResult _scoopResult;
-        private float _scoopStartTime;
-        private float _scoopSeconds;
-
-        // Everything the current slide changed so far, for one glimmer refresh when it ends.
-        private Bounds _slideBounds;
-        private bool _hasSlideBounds;
-
-        // What the next batch of work does; set on the main thread before it starts (starting the worker is a
-        // memory barrier).
+        // What the worker runs; set on the main thread before it starts (starting it is a memory barrier).
         private AshTerrain _workTerrain;
-        private bool _workBegins;
-        private bool _workBeginsScoop;
         private int _workSteps;
         // Written by the worker thread, read after waiting for it.
         private float _workMilliseconds;
 
-        /// <summary>Whether ash is moving right now (a scoop draining or a slide running).</summary>
-        public bool IsSettling => _beginPending || _settler != null && _settler.IsActive;
+        /// <summary>Whether ash is moving right now anywhere (a scoop draining or a slide running).</summary>
+        public bool IsSettling => _jobs.Count > 0;
 
-        /// <summary>Main-thread milliseconds of the last update (writing the slide and re-meshing), for the budget.</summary>
+        /// <summary>How many areas are settling right now.</summary>
+        public int AreaCount => _jobs.Count;
+
+        /// <summary>Main-thread milliseconds of the last update (writing every area and starting their re-mesh).</summary>
         public float LastUpdateMilliseconds { get; private set; }
 
-        /// <summary>Worker-thread milliseconds of the last batch of steps (off the main thread).</summary>
+        /// <summary>Worker-thread milliseconds of the last batch of steps, all areas (off the main thread).</summary>
         public float LastWorkMilliseconds { get; private set; }
 
-        /// <summary>Part of <see cref="LastUpdateMilliseconds"/> spent writing the slide into the terrain.</summary>
+        /// <summary>Part of <see cref="LastUpdateMilliseconds"/> spent writing the slides into the terrain.</summary>
         public float LastCommitMilliseconds { get; private set; }
 
-        /// <summary>Part of <see cref="LastUpdateMilliseconds"/> spent re-meshing the changed chunks.</summary>
+        /// <summary>Part of <see cref="LastUpdateMilliseconds"/> spent starting the re-mesh of the changed chunks.</summary>
         public float LastMeshMilliseconds { get; private set; }
 
         /// <summary>Counts updates, so the performance overlay can tell a new one happened.</summary>
@@ -85,7 +77,7 @@ namespace Cinderbird.Terrain
                 return;
             }
 
-            _settler = new AshSettler(_settings.ToParameters());
+            _parameters = _settings.ToParameters();
             _worker = new WorkerThread("Cinderbird ash settling", DoWork);
         }
 
@@ -100,220 +92,107 @@ namespace Cinderbird.Terrain
         }
 
         /// <summary>
+        /// Before a dig: finishes every area the dig would touch (any scoop ash there fully taken, its Dug reported),
+        /// so nothing still settling can write over the new hole. Areas elsewhere keep going.
+        /// </summary>
+        public void PrepareForDig(Vector3 localCenter, float radius)
+        {
+            if (_worker == null || _terrain.Terrain == null)
+            {
+                return;
+            }
+
+            WaitForWorker();
+            SettleArea dig = AshSettler.AreaOf(_terrain.Terrain.World, localCenter, radius, _parameters.Reach);
+            for (int i = _jobs.Count - 1; i >= 0; i--)
+            {
+                if (_jobs[i].Area.Touches(dig))
+                {
+                    FinishNow(_jobs[i]);
+                }
+            }
+        }
+
+        /// <summary>
         /// Takes a counted but uncarved dig (<see cref="AshTerrain.StartDig"/>) out of the pile over
         /// <paramref name="seconds"/>, with the slide running at the same time. When the ash is all out,
         /// <see cref="VoxelTerrain.CompleteScoop"/> is called with <paramref name="result"/>.
         /// </summary>
-        public void StartScoop(DigResult result, Vector3 localCenter, float radius, float seconds)
+        public void StartScoop(DigResult result, Vector3 localCenter, float radius, float seconds, DigExposure exposure)
         {
-            WriteOutNow();
-            _scoopActive = true;
-            _scoopResult = result;
-            _scoopStartTime = Time.time;
-            _scoopSeconds = Mathf.Max(0.01f, seconds);
-            _pendingCenter = localCenter;
-            _pendingRadius = radius;
-            // Loading the area runs off the main thread; draining starts with the first update.
-            BeginLoad(true);
+            SettleJob job = AddJob(localCenter, radius);
+            job.StartScoop(job.Area, localCenter, radius, result, Time.time, seconds, exposure);
+            StartWorkIfIdle();
         }
 
-        /// <summary>Settles the walls of a hole carved at once, from the next Update.</summary>
+        /// <summary>Settles the walls of a hole carved at once.</summary>
         public void SettleAfterDig(Vector3 localCenter, float radius)
         {
-            if (_settler == null)
+            if (_worker == null)
             {
                 return;
             }
 
-            _beginPending = true;
-            _pendingCenter = localCenter;
-            _pendingRadius = radius;
+            AddJob(localCenter, radius);
+            StartWorkIfIdle();
         }
 
         /// <summary>
-        /// Takes out the rest of a scoop's ash at once (its ash is already in the sieve), e.g. before saving.
-        /// The slide around it carries on.
+        /// Takes out the rest of every scoop's ash at once (it's already in the sieve), e.g. before saving. The slides
+        /// around them carry on.
         /// </summary>
         public void CompleteScoopNow()
         {
-            if (!_scoopActive)
+            if (_worker == null)
             {
                 return;
             }
 
-            if (_working)
+            WaitForWorker();
+            foreach (SettleJob job in _jobs)
             {
-                FinishWork();
-            }
+                if (!job.ScoopPending)
+                {
+                    continue;
+                }
 
-            if (_settler.IsActive)
-            {
-                _settler.Drain(1f);
-                WriteOut();
-            }
-
-            FireScoopDug();
-            if (_settler.IsActive)
-            {
-                // The ash just taken out leaves walls that still need to slide.
-                StartWork();
+                job.Load(_terrain.Terrain);
+                job.Settler.Drain(1f);
+                WriteOut(job);
+                FireScoopDug(job);
             }
         }
 
         /// <summary>
-        /// Writes everything as it stands into the terrain (any scoop ash fully taken) and stops; ash still too
-        /// steep is picked up by the next dig's settling. Waits for steps running on the worker thread first.
+        /// Writes every area as it stands into the terrain (scoop ash fully taken) and stops; ash still too steep is
+        /// picked up by the next dig's settling.
         /// </summary>
         public void WriteOutNow()
         {
-            // A plain dig that hasn't started settling: with nothing loaded there's nothing to write.
-            _beginPending = false;
-            if (_working)
+            if (_worker == null)
             {
-                FinishWork();
-            }
-
-            if (_settler == null || !_settler.IsActive)
-            {
-                FireScoopDug();
                 return;
             }
 
-            _settler.Drain(1f);
-            WriteOut();
-            FireScoopDug();
-            EndSlide();
+            WaitForWorker();
+            for (int i = _jobs.Count - 1; i >= 0; i--)
+            {
+                FinishNow(_jobs[i]);
+            }
         }
 
         private void Update()
         {
-            if (_beginPending)
-            {
-                _beginPending = false;
-                if (_terrain.Terrain != null)
-                {
-                    BeginLoad(false);
-                }
-
-                return;
-            }
-
-            if (!_working || !_worker.IsCompleted || Time.time < _nextUpdateTime)
-            {
-                return;
-            }
-
-            bool moving = FinishWork();
-            bool draining = _settler.IsDraining;
-            if (draining)
-            {
-                _settler.Drain((Time.time - _scoopStartTime) / _scoopSeconds);
-            }
-
-            WriteOut();
-            if (_scoopActive && !_settler.IsDraining)
-            {
-                FireScoopDug();
-            }
-
-            // Ash just taken out needs more steps even if the last batch found everything at rest.
-            if (!_settler.IsActive || !moving && !draining)
-            {
-                EndSlide();
-                return;
-            }
-
-            StartWork();
-        }
-
-        private void BeginLoad(bool scoop)
-        {
             if (_working)
             {
+                if (!_worker.IsCompleted || Time.time < _nextUpdateTime)
+                {
+                    return;
+                }
+
                 FinishWork();
             }
-
-            _workTerrain = _terrain.Terrain;
-            _workBegins = true;
-            _workBeginsScoop = scoop;
-            // Copied here, on the main thread: loose embers can move while the area loads on the worker.
-            _settler.UseLooseEmbers(_workTerrain.LooseEmbers);
-            StartWork();
-        }
-
-        private void StartWork()
-        {
-            _workSteps = _settings.StepsPerUpdate;
-            _working = true;
-            _worker.Start();
-            _nextUpdateTime = Time.time + 1f / _settings.UpdatesPerSecond;
-        }
-
-        // Runs on the worker thread.
-        private bool DoWork()
-        {
-            long started = TimeMeasure.Now();
-            if (_workBegins)
-            {
-                _workBegins = false;
-                if (_workBeginsScoop)
-                {
-                    _settler.BeginScoop(_workTerrain, _pendingCenter, _pendingRadius);
-                }
-                else
-                {
-                    _settler.Begin(_workTerrain, _pendingCenter, _pendingRadius);
-                }
-            }
-
-            bool moving = _settler.Step(_workSteps);
-            // Timed here: the result is only collected at the next update.
-            _workMilliseconds = TimeMeasure.MillisecondsSince(started);
-            return moving;
-        }
-
-        private bool FinishWork()
-        {
-            _working = false;
-            bool moving;
-            Exception error;
-            using (WaitMarker.Auto())
-            {
-                moving = _worker.Wait(out error);
-            }
-
-            if (error == null)
-            {
-                LastWorkMilliseconds = _workMilliseconds;
-                return moving;
-            }
-
-            Debug.LogError($"Ash settling failed: {error}", this);
-            _settler.End();
-            _hasSlideBounds = false;
-            if (_scoopActive)
-            {
-                // The scooped ash is already in the sieve: make sure it's out of the pile, whatever the slide did.
-                _terrain.CarveNow(_pendingCenter, _pendingRadius);
-            }
-
-            return false;
-        }
-
-        private void FireScoopDug()
-        {
-            if (!_scoopActive)
-            {
-                return;
-            }
-
-            _scoopActive = false;
-            _terrain.CompleteScoop(_scoopResult, _pendingCenter, _pendingRadius);
-        }
-
-        private void WriteOut()
-        {
-            if (!_settler.IsActive)
+            else if (_jobs.Count == 0)
             {
                 return;
             }
@@ -321,43 +200,205 @@ namespace Cinderbird.Terrain
             using (SettleMarker.Auto())
             {
                 long started = TimeMeasure.Now();
-                _settler.Commit();
-                LastCommitMilliseconds = TimeMeasure.MillisecondsSince(started);
-                LastMeshMilliseconds = 0f;
-                if (_settler.LastCommitChangedAnything)
+                float commit = 0f;
+                float mesh = 0f;
+                for (int i = _jobs.Count - 1; i >= 0; i--)
                 {
-                    Bounds changed = _settler.LastCommitBounds;
-                    if (_hasSlideBounds)
+                    SettleJob job = _jobs[i];
+                    if (job.NeedsLoading)
                     {
-                        _slideBounds.Encapsulate(changed);
-                    }
-                    else
-                    {
-                        _slideBounds = changed;
-                        _hasSlideBounds = true;
+                        continue;
                     }
 
-                    _terrain.ApplySettledEdits(changed);
-                    LastMeshMilliseconds = _terrain.LastMeshMilliseconds;
-                    PuffDust();
+                    AshSettler settler = job.Settler;
+                    bool draining = settler.IsDraining;
+                    if (draining)
+                    {
+                        settler.Drain((Time.time - job.ScoopStartTime) / job.ScoopSeconds);
+                    }
+
+                    WriteOut(job);
+                    commit += LastCommitMilliseconds;
+                    mesh += LastMeshMilliseconds;
+                    if (job.ScoopPending && !settler.IsDraining)
+                    {
+                        FireScoopDug(job);
+                    }
+
+                    // Ash just taken out needs more steps even if the last batch found everything at rest.
+                    if (!settler.IsActive || (!job.Moving && !draining))
+                    {
+                        EndJob(job);
+                    }
                 }
 
+                LastCommitMilliseconds = commit;
+                LastMeshMilliseconds = mesh;
                 LastUpdateMilliseconds = TimeMeasure.MillisecondsSince(started);
                 UpdateCount++;
             }
+
+            StartWorkIfIdle();
         }
 
-        private void EndSlide()
+        private SettleJob AddJob(Vector3 localCenter, float radius)
         {
-            _settler.End();
-            if (_hasSlideBounds)
+            WaitForWorker();
+            SettleArea area = AshSettler.AreaOf(_terrain.Terrain.World, localCenter, radius, _parameters.Reach);
+            // Two simulations must never share a column (each would write its own copy back); the dig normally
+            // finished these already, this keeps it true for any caller.
+            for (int i = _jobs.Count - 1; i >= 0; i--)
             {
-                _hasSlideBounds = false;
-                _terrain.FinishSettle(_slideBounds);
+                if (_jobs[i].Area.Touches(area))
+                {
+                    FinishNow(_jobs[i]);
+                }
+            }
+
+            if (_jobs.Count >= MaxAreas)
+            {
+                FinishNow(_jobs[0]);
+            }
+
+            SettleJob job = _pool.Count > 0 ? _pool.Pop() : new SettleJob(_parameters);
+            job.StartSlide(area, localCenter, radius);
+            // Copied here, on the main thread: loose embers can move while the area loads on the worker.
+            job.Settler.UseLooseEmbers(_terrain.Terrain.LooseEmbers);
+            _jobs.Add(job);
+            return job;
+        }
+
+        private void StartWorkIfIdle()
+        {
+            if (_working || _jobs.Count == 0)
+            {
+                return;
+            }
+
+            _workTerrain = _terrain.Terrain;
+            _workSteps = _settings.StepsPerUpdate;
+            _working = true;
+            _worker.Start();
+            _nextUpdateTime = Time.time + 1f / _settings.UpdatesPerSecond;
+        }
+
+        // Runs on the worker thread: loads new areas, then steps every area.
+        private bool DoWork()
+        {
+            long started = TimeMeasure.Now();
+            for (int i = 0; i < _jobs.Count; i++)
+            {
+                SettleJob job = _jobs[i];
+                job.Load(_workTerrain);
+                job.Moving = job.Settler.Step(_workSteps);
+            }
+
+            // Timed here: the result is only collected at the next update.
+            _workMilliseconds = TimeMeasure.MillisecondsSince(started);
+            return true;
+        }
+
+        private void WaitForWorker()
+        {
+            if (_working)
+            {
+                FinishWork();
             }
         }
 
-        private void PuffDust()
+        private void FinishWork()
+        {
+            _working = false;
+            Exception error;
+            using (WaitMarker.Auto())
+            {
+                _worker.Wait(out error);
+            }
+
+            if (error == null)
+            {
+                LastWorkMilliseconds = _workMilliseconds;
+                return;
+            }
+
+            Debug.LogError($"Ash settling failed: {error}", this);
+            for (int i = _jobs.Count - 1; i >= 0; i--)
+            {
+                SettleJob job = _jobs[i];
+                if (job.ScoopPending)
+                {
+                    // The scooped ash is already in the sieve: make sure it's out of the pile, whatever the slide did.
+                    _terrain.CarveNow(job.Center, job.Radius);
+                    FireScoopDug(job);
+                }
+
+                job.Settler.End();
+                _jobs.RemoveAt(i);
+                _pool.Push(job);
+            }
+        }
+
+        // Ends one area at once: loaded if it wasn't yet, scoop ash fully taken, written, reported.
+        private void FinishNow(SettleJob job)
+        {
+            job.Load(_terrain.Terrain);
+            if (job.Settler.IsActive)
+            {
+                job.Settler.Drain(1f);
+                WriteOut(job);
+            }
+
+            FireScoopDug(job);
+            EndJob(job);
+        }
+
+        private void FireScoopDug(SettleJob job)
+        {
+            if (!job.ScoopPending)
+            {
+                return;
+            }
+
+            job.ScoopPending = false;
+            _terrain.CompleteScoop(job.ScoopResult, job.Center, job.Radius, job.ScoopExposure);
+        }
+
+        private void WriteOut(SettleJob job)
+        {
+            AshSettler settler = job.Settler;
+            if (!settler.IsActive)
+            {
+                return;
+            }
+
+            long started = TimeMeasure.Now();
+            settler.Commit();
+            LastCommitMilliseconds = TimeMeasure.MillisecondsSince(started);
+            LastMeshMilliseconds = 0f;
+            if (!settler.LastCommitChangedAnything)
+            {
+                return;
+            }
+
+            Bounds changed = settler.LastCommitBounds;
+            job.AddChanged(changed);
+            _terrain.ApplySettledEdits(changed);
+            LastMeshMilliseconds = _terrain.LastMeshMilliseconds;
+            PuffDust(settler);
+        }
+
+        private void EndJob(SettleJob job)
+        {
+            job.Settler.End();
+            _jobs.Remove(job);
+            _pool.Push(job);
+            if (job.HasSlideBounds)
+            {
+                _terrain.FinishSettle(job.SlideBounds);
+            }
+        }
+
+        private void PuffDust(AshSettler settler)
         {
             int perSpot = _settings.DustPerSpot;
             if (_dust == null || perSpot <= 0)
@@ -365,13 +406,13 @@ namespace Cinderbird.Terrain
                 return;
             }
 
-            for (int i = 0; i < _settler.LastSlidePoints.Count; i++)
+            for (int i = 0; i < settler.LastSlidePoints.Count; i++)
             {
                 ParticleSystem.EmitParams emit = new ParticleSystem.EmitParams
                 {
-                    position = transform.TransformPoint(_settler.LastSlidePoints[i]),
+                    position = transform.TransformPoint(settler.LastSlidePoints[i]),
                     applyShapeToPosition = true,
-                    startColor = _terrain.DustColorOfLayer(_settler.LastSlideLayers[i]),
+                    startColor = _terrain.DustColorOfLayer(settler.LastSlideLayers[i]),
                 };
                 _dust.Emit(emit, perSpot);
             }

@@ -60,9 +60,13 @@ namespace Cinderbird.Terrain
         }
 
         /// <param name="layout">Assigns ash layers by depth; null leaves everything in layer 0.</param>
+        /// <summary>Where the layers were laid out at generation; null when everything is layer 0.</summary>
+        public LayerLayout Layout { get; private set; }
+
         public void Generate(AshPileShape shape, LayerLayout layout = null)
         {
             AshPileGenerator.Generate(World, shape, layout);
+            Layout = layout;
             StoreNaturalSurface(shape);
             TotalAshVolume = World.TotalAshVolume();
             World.MarkAllDirty();

@@ -233,6 +233,33 @@ namespace Cinderbird.Terrain
         }
 
         /// <summary>
+        /// The height of the topmost ash surface in the sample column nearest to a local x/z (where the density crosses
+        /// from ash to the air above it). False if that column holds no ash.
+        /// </summary>
+        public bool TryFindTop(float x, float z, out float y)
+        {
+            int ix = Mathf.Clamp(Mathf.RoundToInt((x - Origin.x) / CellSize), 1, SamplesX - 2);
+            int iz = Mathf.Clamp(Mathf.RoundToInt((z - Origin.z) / CellSize), 1, SamplesZ - 2);
+            float above = GetDensity(ix, SamplesY - 1, iz);
+            for (int iy = SamplesY - 2; iy >= 0; iy--)
+            {
+                float density = GetDensity(ix, iy, iz);
+                if (density > 0f)
+                {
+                    // The density ramps linearly across the surface: interpolate where it crosses 0.
+                    float t = density / (density - Mathf.Min(above, 0f));
+                    y = Origin.y + (iy + t) * CellSize;
+                    return true;
+                }
+
+                above = density;
+            }
+
+            y = Origin.y;
+            return false;
+        }
+
+        /// <summary>
         /// Total ash volume in cubic meters, counting each shared sample once. Walks every sample, so it's meant
         /// for start-up; keep a running total for per-dig updates.
         /// </summary>

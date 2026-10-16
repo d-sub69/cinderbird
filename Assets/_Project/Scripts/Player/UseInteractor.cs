@@ -1,3 +1,4 @@
+using Cinderbird.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -11,6 +12,8 @@ namespace Cinderbird.Player
     {
         [SerializeField] private PlayerInteractor _interactor;
         [SerializeField] private InputActionReference _useAction;
+        [Tooltip("Optional: while something else owns the buttons (sending a helper), this leaves them alone.")]
+        [SerializeField] private InputFocus _focus;
 
         private void Awake()
         {
@@ -29,7 +32,7 @@ namespace Cinderbird.Player
         private void Update()
         {
             // While the cursor is free (paused, in a menu) the key belongs to the menu.
-            if (Cursor.lockState != CursorLockMode.Locked || !_useAction.action.WasPressedThisFrame())
+            if (Cursor.lockState != CursorLockMode.Locked || !_useAction.action.WasPressedThisFrame() || (_focus != null && _focus.IsTaken))
             {
                 return;
             }

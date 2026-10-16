@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
+using Cinderbird.Helpers;
 using Cinderbird.Offerings;
 using Cinderbird.Player;
 using Cinderbird.Sifting;
@@ -27,6 +28,7 @@ namespace Cinderbird.Save
         private readonly PlaceableTool[] _placeableTools;
         private readonly Upgrades _upgrades;
         private readonly Shrine _shrine;
+        private readonly Sally _sally;
         private readonly List<OfferingState> _stateBuffer = new List<OfferingState>();
         private readonly List<KeyValuePair<string, int>> _levelBuffer = new List<KeyValuePair<string, int>>();
         private readonly List<ToolDefinition> _slotBuffer = new List<ToolDefinition>();
@@ -35,7 +37,8 @@ namespace Cinderbird.Save
         private TerrainSnapshot _terrainSnapshot;
 
         public SaveStateMapper(VoxelTerrain pile, Wallet wallet, FirstPersonController player, ToolBelt toolBelt,
-            Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools, Upgrades upgrades, Shrine shrine)
+            Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools, Upgrades upgrades, Shrine shrine,
+            Sally sally)
         {
             _pile = pile;
             _wallet = wallet;
@@ -47,6 +50,7 @@ namespace Cinderbird.Save
             _placeableTools = placeableTools;
             _upgrades = upgrades;
             _shrine = shrine;
+            _sally = sally;
         }
 
         /// <summary>
@@ -86,6 +90,8 @@ namespace Cinderbird.Save
             CaptureUpgrades(file.Upgrades);
             CaptureOfferings(file.Offerings);
             EmberRecord.Fill(file.Basket.Embers, _basket.Contents.Embers);
+            CaptureHelper(file.Helper);
+
             return file;
         }
 
@@ -142,6 +148,8 @@ namespace Cinderbird.Save
             _sieve.Contents.Restore(Mathf.Max(0f, sieve.AshVolume), sieve.LoadVolume, sieve.AshColor, sieve.DustColor,
                 EmberRecord.ToEmbers(sieve.Embers));
             lostBasketEmbers = _basket.Contents.Restore(EmberRecord.ToEmbers(file.Basket.Embers));
+            RestoreHelper(file.Helper, sameMountain);
+
             RestoreTools(file.Tools, sameMountain);
             if (sameMountain)
             {
@@ -306,9 +314,47 @@ namespace Cinderbird.Save
 
         private void CaptureSieve(SieveSave save)
         {
-            SieveContents contents = _sieve.Contents;
+            CaptureSieve(save, _sieve, _sieveFiller);
+        }
+
+        private void CaptureHelper(HelperSave save)
+        {
+            if (_sally == null)
+            {
+                return;
+            }
+
+            save.Mode = (int)_sally.Mode;
+            save.HasSpot = _sally.HasSpot;
+            save.Spot = _sally.Spot;
+            save.SpotLayer = _sally.SpotLayer;
+            save.SpotPending = _sally.SpotPending;
+            save.HasPose = _sally.IsHired;
+            save.Position = _sally.transform.position;
+            save.Yaw = _sally.transform.eulerAngles.y;
+            CaptureSieve(save.Sieve, _sally.Sieve, _sally.Filler);
+        }
+
+        // After the upgrades: they hire her and size her sieve.
+        private void RestoreHelper(HelperSave save, bool sameMountain)
+        {
+            if (_sally == null)
+            {
+                return;
+            }
+
+            HelperMode mode = save.Mode >= (int)HelperMode.Auto && save.Mode <= (int)HelperMode.Off ? (HelperMode)save.Mode : HelperMode.Auto;
+            _sally.Restore(mode, save.HasSpot, save.Spot, save.SpotLayer, save.SpotPending, save.HasPose && sameMountain, save.Position, save.Yaw);
+            SieveSave sieve = save.Sieve;
+            _sally.Sieve.Contents.Restore(Mathf.Max(0f, sieve.AshVolume), sieve.LoadVolume, sieve.AshColor, sieve.DustColor,
+                EmberRecord.ToEmbers(sieve.Embers));
+        }
+
+        private static void CaptureSieve(SieveSave save, Sieve sieve, SieveFiller filler)
+        {
+            SieveContents contents = sieve.Contents;
             EmberRecord.Fill(save.Embers, contents.Embers);
-            if (!_sieveFiller.IsFilling)
+            if (!filler.IsFilling)
             {
                 save.AshVolume = contents.AshVolume;
                 save.LoadVolume = contents.LoadVolume;
@@ -319,16 +365,16 @@ namespace Cinderbird.Save
 
             // A load still pouring in already left the mountain, so it counts as in the sieve. Pours only start
             // into an ash-free sieve, so it is the whole load.
-            IReadOnlyList<Ember> incoming = _sieveFiller.IncomingEmbers;
+            IReadOnlyList<Ember> incoming = filler.IncomingEmbers;
             for (int i = 0; i < incoming.Count; i++)
             {
                 save.Embers.Add(new EmberRecord(incoming[i]));
             }
 
-            save.AshVolume = contents.AshVolume + _sieveFiller.IncomingVolume;
+            save.AshVolume = contents.AshVolume + filler.IncomingVolume;
             save.LoadVolume = save.AshVolume;
-            save.AshColor = _sieveFiller.IncomingAshColor;
-            save.DustColor = _sieveFiller.IncomingDustColor;
+            save.AshColor = filler.IncomingAshColor;
+            save.DustColor = filler.IncomingDustColor;
         }
     }
 }

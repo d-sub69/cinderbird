@@ -3,6 +3,7 @@ using System.Text;
 using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
+using Cinderbird.Helpers;
 using Cinderbird.Nest;
 using Cinderbird.Offerings;
 using Cinderbird.Player;
@@ -53,6 +54,10 @@ namespace Cinderbird.UI
         [SerializeField] private SieveMeshSlip _meshSlip;
         [Tooltip("Optional: tells when an offering is uncovered and when a shelf set is complete.")]
         [SerializeField] private Shrine _shrine;
+        [Tooltip("Optional: shows what Sally (the helper) is doing and how full her sieve is.")]
+        [SerializeField] private Sally _sally;
+        [Tooltip("Optional: prompts while choosing where to send Sally.")]
+        [SerializeField] private HelperAssignController _assign;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -127,6 +132,18 @@ namespace Cinderbird.UI
                 _shrine.Uncovered += OnOfferingUncovered;
                 _shrine.SetCompleted += OnSetCompleted;
             }
+
+            if (_sally != null)
+            {
+                _sally.Changed += MarkDirty;
+                _sally.Notice += ShowMessage;
+                _sally.Sieve.Contents.Changed += MarkDirty;
+            }
+
+            if (_assign != null)
+            {
+                _assign.StateChanged += OnPromptChanged;
+            }
         }
 
         private void OnDisable()
@@ -178,6 +195,18 @@ namespace Cinderbird.UI
             {
                 _shrine.Uncovered -= OnOfferingUncovered;
                 _shrine.SetCompleted -= OnSetCompleted;
+            }
+
+            if (_sally != null)
+            {
+                _sally.Changed -= MarkDirty;
+                _sally.Notice -= ShowMessage;
+                _sally.Sieve.Contents.Changed -= MarkDirty;
+            }
+
+            if (_assign != null)
+            {
+                _assign.StateChanged -= OnPromptChanged;
             }
         }
 
@@ -362,9 +391,11 @@ namespace Cinderbird.UI
                 .Append(" (").AppendInt(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
 
             AppendHeatLevel();
+            AppendHelper();
             AppendPourPrompt();
             AppendPickUpPrompt();
             AppendUsePrompt();
+            AppendAssignPrompt();
             AppendPlacementPrompt();
 
             if (_message != null)
@@ -393,6 +424,97 @@ namespace Cinderbird.UI
         private void OnSlipped(int count)
         {
             ShowMessage(count == 1 ? "A spark slipped through the mesh" : $"{count} sparks slipped through the mesh");
+        }
+
+        // "Sally: sifting the north slice (on her own), sieve 3 / 10".
+        private void AppendHelper()
+        {
+            if (_sally == null || !_sally.IsHired)
+            {
+                return;
+            }
+
+            _builder.AppendLine().Append("Sally: ").Append(HelperActivityText(_sally.Activity));
+            if (_sally.WorkLayer >= 0 && _sally.Mode != HelperMode.Off && !_sally.SpotPending)
+            {
+                _builder.Append(" in the ").Append(_pile.LayerName(_sally.WorkLayer));
+            }
+
+            _builder.Append(_sally.Mode == HelperMode.Assigned ? " (sent to a spot)" : _sally.Mode == HelperMode.Off ? " (resting)" : " (on her own)")
+                .Append(", sieve ").AppendInt(_sally.Sieve.Contents.EmberCount).Append(" / ").AppendInt(_sally.Sieve.Contents.EmberCapacity);
+            if (_sally.CantWorkReason.Length > 0 && _sally.Mode != HelperMode.Off)
+            {
+                _builder.AppendLine().Append("  She can't work: ").Append(_sally.CantWorkReason);
+            }
+
+            // For testing: what she is doing inside, so a stuck Sally can be told apart from an idle one.
+            if (DevTools.Enabled)
+            {
+                HelperMover mover = _sally.Mover;
+                _builder.AppendLine().Append("  [debug] ").Append(_sally.Activity.ToString()).Append(", target ")
+                    .Append(_sally.HasTarget ? "yes" : "no").Append(", path ")
+                    .Append(mover.HasFailed ? "failed" : mover.HasArrived ? "arrived" : mover.IsWalking ? "walking" : "none");
+                if (_sally.LastProblem.Length > 0)
+                {
+                    _builder.Append(", last: ").Append(_sally.LastProblem);
+                }
+            }
+        }
+
+        private static string HelperActivityText(HelperActivity activity)
+        {
+            switch (activity)
+            {
+                case HelperActivity.Idle:
+                    return "waiting by the shop";
+                case HelperActivity.Wait:
+                    return "listening";
+                case HelperActivity.GoHome:
+                    return "walking back to the shop";
+                case HelperActivity.GoToSpot:
+                    return "walking to where you sent her";
+                case HelperActivity.GoToWork:
+                    return "walking to the ash";
+                case HelperActivity.GoToNest:
+                    return "carrying embers to the nest";
+                case HelperActivity.Pour:
+                    return "feeding the nest";
+                default:
+                    return "sifting";
+            }
+        }
+
+        private void AppendAssignPrompt()
+        {
+            if (_assign == null || !_assign.IsActive)
+            {
+                return;
+            }
+
+            _builder.AppendLine();
+            switch (_assign.Check)
+            {
+                case AssignCheck.Valid when _assign.TargetLayer >= 0:
+                    _builder.Append("Left-click: send Sally here to sift the ").Append(_pile.LayerName(_assign.TargetLayer));
+                    break;
+                case AssignCheck.Valid:
+                    _builder.Append("Left-click: send Sally here to sift the outer ash");
+                    break;
+                case AssignCheck.Sealed:
+                    _builder.Append("That layer is still sealed");
+                    break;
+                case AssignCheck.NoAshNearby:
+                    _builder.Append("Too far from the ash");
+                    break;
+                case AssignCheck.Unreachable:
+                    _builder.Append("Sally can't get there");
+                    break;
+                default:
+                    _builder.Append("Point at the ash, or the ground beside it");
+                    break;
+            }
+
+            _builder.Append("   Right-click: cancel");
         }
 
         private void OnLevelReached(int level)
