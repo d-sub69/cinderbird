@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa3093cda45c67f4d96eff44d4d1e823, type: 3}
+  m_Name: Upgrade_WindRadius
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Economy.TableUpgrade
+  _id: wind_radius
+  _displayName: Warm Wind reach
+  _baseCost: 30
+  _costGrowth: 1.15
+  _requires: {fileID: 0}
+  _unlockedWith: {fileID: 11400000, guid: 4a01c23758596cc418dff8a5bd8c9675, type: 2}
+  _category: 1
+  _levels:
+  - _name: 2.5 m
+    _price: 0
+    _value: 2.5
+    _description: Blows the ash off a 2.5 m circle
+  - _name: 3.25 m
+    _price: 400
+    _value: 3.25
+    _description: Blows the ash off a 3.25 m circle
+  - _name: 4 m
+    _price: 1000
+    _value: 4
+    _description: Blows the ash off a 4 m circle

@@ -19,6 +19,7 @@ namespace Cinderbird.Tests.EditMode
             public string Id { get; }
             public int MaxLevel { get; }
             public string RequiresId { get; set; } = string.Empty;
+            public int RequiredHeatLevel { get; set; }
             private int BaseCost { get; }
             private float Growth { get; }
 
@@ -34,6 +35,24 @@ namespace Cinderbird.Tests.EditMode
             currencies.Add(glow, 0);
             levels = new UpgradeLevels();
             return new Shop(currencies, levels);
+        }
+
+        [Test]
+        public void PowerUpgrade_OnSaleOnlyOnceTheNestIsWarmEnough()
+        {
+            Shop shop = CreateShop(1000, out _, out _);
+            FakeUpgrade windRadius = new FakeUpgrade("wind_radius", 2, 100, 1f) { RequiredHeatLevel = 1 };
+            int changes = 0;
+            shop.AvailabilityChanged += () => changes++;
+
+            Assert.That(shop.IsAvailable(windRadius), Is.False);
+            Assert.That(shop.TryBuy(windRadius), Is.EqualTo(Purchase.Locked));
+
+            shop.SetHeatLevel(1);
+
+            Assert.That(changes, Is.EqualTo(1));
+            Assert.That(shop.IsAvailable(windRadius), Is.True);
+            Assert.That(shop.TryBuy(windRadius), Is.EqualTo(Purchase.Bought));
         }
 
         [Test]

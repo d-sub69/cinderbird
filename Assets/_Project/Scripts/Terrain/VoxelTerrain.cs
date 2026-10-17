@@ -246,6 +246,47 @@ namespace Cinderbird.Terrain
             }
         }
 
+        /// <summary>
+        /// Blows the top of the ash off a round area (the Warm Wind): the ash is gone, embers it covered lie loose on the new
+        /// surface, offerings there are uncovered, and the edges settle like after a dig. Fires <see cref="DigStarted"/> and
+        /// <see cref="Dug"/> as a dig does, so everything that follows digs follows this too.
+        /// </summary>
+        /// <param name="worldCenter">Middle of the area, on the surface.</param>
+        public DigResult Blow(Vector3 worldCenter, float radius, float depth)
+        {
+            if (_terrain == null)
+            {
+                return default;
+            }
+
+            Vector3 localCenter = transform.InverseTransformPoint(worldCenter);
+            if (_settling != null)
+            {
+                _settling.PrepareForDig(localCenter, radius);
+            }
+
+            using (DigMarker.Auto())
+            {
+                DigExposure exposure = _exposures.Count > 0 ? _exposures.Pop() : new DigExposure();
+                DigResult result = _terrain.BlowSurface(localCenter, radius, depth, exposure.Embers, exposure.Finds);
+                if (!result.RemovedAnyAsh)
+                {
+                    LayExposed(exposure);
+                    return result;
+                }
+
+                DigStarted?.Invoke(result, localCenter, radius);
+                _meshes.RebuildDirtyChunks();
+                CompleteScoop(result, localCenter, radius, exposure);
+                if (Settles)
+                {
+                    _settling.SettleAfterDig(localCenter, radius);
+                }
+
+                return result;
+            }
+        }
+
         /// <summary>Opens a scoop's hole that is still draining all the way at once (e.g. before saving).</summary>
         public void CompleteScoopNow()
         {

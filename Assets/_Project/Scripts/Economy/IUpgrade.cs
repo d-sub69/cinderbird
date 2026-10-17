@@ -14,5 +14,8 @@ namespace Cinderbird.Economy
 
         /// <summary>Id of an upgrade that must be bought (level 1 or more) before this one is on sale; empty for none.</summary>
         string RequiresId { get; }
+
+        /// <summary>The nest's Heat level it goes on sale with; 0 for from the start.</summary>
+        int RequiredHeatLevel { get; }
     }
 }

@@ -7,6 +7,7 @@ using Cinderbird.Helpers;
 using Cinderbird.Nest;
 using Cinderbird.Offerings;
 using Cinderbird.Player;
+using Cinderbird.Powers;
 using Cinderbird.Save;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
@@ -58,6 +59,8 @@ namespace Cinderbird.UI
         [SerializeField] private Sally _sally;
         [Tooltip("Optional: prompts while choosing where to send Sally.")]
         [SerializeField] private HelperAssignController _assign;
+        [Tooltip("Optional: shows whether the Warm Wind is ready, and its messages.")]
+        [SerializeField] private WarmWind _warmWind;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -144,6 +147,12 @@ namespace Cinderbird.UI
             {
                 _assign.StateChanged += OnPromptChanged;
             }
+
+            if (_warmWind != null)
+            {
+                _warmWind.Changed += MarkDirty;
+                _warmWind.Notice += ShowMessage;
+            }
         }
 
         private void OnDisable()
@@ -207,6 +216,12 @@ namespace Cinderbird.UI
             if (_assign != null)
             {
                 _assign.StateChanged -= OnPromptChanged;
+            }
+
+            if (_warmWind != null)
+            {
+                _warmWind.Changed -= MarkDirty;
+                _warmWind.Notice -= ShowMessage;
             }
         }
 
@@ -392,6 +407,7 @@ namespace Cinderbird.UI
 
             AppendHeatLevel();
             AppendHelper();
+            AppendWarmWind();
             AppendPourPrompt();
             AppendPickUpPrompt();
             AppendUsePrompt();
@@ -481,6 +497,26 @@ namespace Cinderbird.UI
                     return "feeding the nest";
                 default:
                     return "sifting";
+            }
+        }
+
+        // "Warm Wind (hold F): ready" or "Warm Wind: gathers again in 42 s", once the nest is warm enough.
+        private void AppendWarmWind()
+        {
+            if (_warmWind == null || !_warmWind.IsUnlocked)
+            {
+                return;
+            }
+
+            int seconds = Mathf.CeilToInt(_warmWind.CooldownRemaining);
+            _builder.AppendLine();
+            if (seconds <= 0)
+            {
+                _builder.Append("Warm Wind (hold F, let go): ready");
+            }
+            else
+            {
+                _builder.Append("Warm Wind: gathers again in ").AppendInt(seconds).Append(" s");
             }
         }
 

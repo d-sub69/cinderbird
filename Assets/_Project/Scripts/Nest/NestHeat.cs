@@ -16,6 +16,8 @@ namespace Cinderbird.Nest
         [SerializeField] private Wallet _wallet;
         [SerializeField] private VoxelTerrain _pile;
         [SerializeField] private LayerCatalog _layers;
+        [Tooltip("Optional: the shop puts upgrades that come with a Heat level on sale (a power's).")]
+        [SerializeField] private Upgrades _upgrades;
 
         private HeatLevels _levels;
         private float[] _cleared;
@@ -131,6 +133,11 @@ namespace Cinderbird.Nest
 
             bool risen = level > Level;
             Level = level;
+            if (_upgrades != null && _upgrades.Shop != null)
+            {
+                _upgrades.Shop.SetHeatLevel(level);
+            }
+
             if (announce && risen)
             {
                 LevelReached?.Invoke(level);

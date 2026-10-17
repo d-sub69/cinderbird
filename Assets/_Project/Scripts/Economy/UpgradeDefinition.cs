@@ -17,11 +17,19 @@ namespace Cinderbird.Economy
         [SerializeField, Min(1f)] private float _costGrowth = 1.15f;
         [Tooltip("Optional: on sale only once this upgrade is bought (e.g. a helper's upgrades need the helper).")]
         [SerializeField] private UpgradeDefinition _requires;
+        [Tooltip("Optional: on sale only once this comes (a power: its Heat level).")]
+        [SerializeField] private HeatGate _unlockedWith;
+        [Tooltip("The shop tab it is sold in.")]
+        [SerializeField] private UpgradeCategory _category = UpgradeCategory.Tools;
 
         public string Id => _id;
         public string DisplayName => _displayName;
 
         public string RequiresId => _requires != null ? _requires.Id : string.Empty;
+
+        public int RequiredHeatLevel => _unlockedWith != null ? _unlockedWith.RequiredHeatLevel : 0;
+
+        public UpgradeCategory Category => _category;
 
         /// <summary>Levels 0 .. MaxLevel; 0 is what the player starts with.</summary>
         public int MaxLevel => Mathf.Max(0, LevelCount - 1);

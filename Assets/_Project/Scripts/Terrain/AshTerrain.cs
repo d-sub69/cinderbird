@@ -384,6 +384,154 @@ namespace Cinderbird.Terrain
             return World.Origin.y + NaturalSurfaceSample(x, z) * World.CellSize;
         }
 
+        /// <summary>
+        /// Blows the top of the ash off a round area: every column within <paramref name="radius"/> of the center loses up to
+        /// <paramref name="depth"/> meters off its surface, the full depth in the middle and fading out at the rim. The ash
+        /// is gone (not collected). Sealed layers aren't touched. Embers in the blown-off skin are moved to
+        /// <paramref name="exposedEmbers"/>, set on the new surface, for the caller to lay loose once the meshes are up
+        /// (<see cref="AddLoose(Ember, Vector3)"/>); finds there are moved to <paramref name="uncoveredFinds"/>.
+        /// Change nothing else in between, as with <see cref="StartDig"/>.
+        /// </summary>
+        /// <param name="center">Middle of the area (local); only x and z matter for the columns.</param>
+        public DigResult BlowSurface(Vector3 center, float radius, float depth, List<LooseEmber> exposedEmbers, List<BuriedFind> uncoveredFinds)
+        {
+            float removed = 0f;
+            if (radius <= 0f || depth <= 0f)
+            {
+                return default;
+            }
+
+            float cell = World.CellSize;
+            int x0 = Mathf.Max(1, Mathf.FloorToInt((center.x - radius - World.Origin.x) / cell));
+            int x1 = Mathf.Min(World.SamplesX - 2, Mathf.CeilToInt((center.x + radius - World.Origin.x) / cell));
+            int z0 = Mathf.Max(1, Mathf.FloorToInt((center.z - radius - World.Origin.z) / cell));
+            int z1 = Mathf.Min(World.SamplesZ - 2, Mathf.CeilToInt((center.z + radius - World.Origin.z) / cell));
+            int blockedLayer = -1;
+            for (int iz = z0; iz <= z1; iz++)
+            {
+                for (int ix = x0; ix <= x1; ix++)
+                {
+                    Vector3 column = World.SamplePosition(ix, 0, iz);
+                    float distance = Mathf.Sqrt((column.x - center.x) * (column.x - center.x) + (column.z - center.z) * (column.z - center.z));
+                    float strip = depth * BlowFalloff(distance / radius);
+                    if (strip > 0f)
+                    {
+                        removed += BlowColumn(ix, iz, strip, ref blockedLayer);
+                    }
+                }
+            }
+
+            ExposeBlownEmbers(center, radius, depth, exposedEmbers);
+            UncoverBlownFinds(center, radius, uncoveredFinds);
+            TotalAshVolume -= removed;
+            return new DigResult(removed, 0, removed > 0f ? -1 : blockedLayer);
+        }
+
+        // Full depth over the inner 70 % of the radius, easing to nothing at the rim, so the edge is a soft slope, not a step.
+        private static float BlowFalloff(float t)
+        {
+            return 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.7f, 1f, t));
+        }
+
+        // Lowers one sample column's surface by `strip` meters: a CSG "no ash above this height", like a dig but flat.
+        private float BlowColumn(int ix, int iz, float strip, ref int blockedLayer)
+        {
+            if (!World.TryFindTop(World.SamplePosition(ix, 0, iz).x, World.SamplePosition(ix, 0, iz).z, out float top))
+            {
+                return 0f;
+            }
+
+            float cell = World.CellSize;
+            float newTop = top - strip;
+            float removedFill = 0f;
+            int from = Mathf.Min(World.SamplesY - 2, Mathf.CeilToInt((top - World.Origin.y) / cell) + 1);
+            for (int iy = from; iy >= 1; iy--)
+            {
+                float y = World.Origin.y + iy * cell;
+                if (y < newTop - cell)
+                {
+                    break;
+                }
+
+                float carved = Mathf.Clamp((newTop - y) / cell, VoxelGrid.Air, VoxelGrid.Ash);
+                float current = World.GetDensity(ix, iy, iz);
+                if (carved >= current)
+                {
+                    continue;
+                }
+
+                int layer = World.GetLayer(ix, iy, iz);
+                if (!Locks.IsUnlocked(layer))
+                {
+                    blockedLayer = blockedLayer < 0 ? layer : blockedLayer;
+                    continue;
+                }
+
+                removedFill += VoxelGrid.Fill(current) - VoxelGrid.Fill(carved);
+                World.SetDensity(ix, iy, iz, carved);
+            }
+
+            return removedFill * World.CellVolume;
+        }
+
+        // Embers the wind laid bare: within the area and now at (or above) the new surface. They are set on the surface;
+        // the rest go back where they were.
+        private void ExposeBlownEmbers(Vector3 center, float radius, float depth, List<LooseEmber> exposed)
+        {
+            float reach = radius + depth + World.CellSize * 4f;
+            Vector3 extent = new Vector3(reach, World.Size.y, reach);
+            World.ChunksOverlapping(center - extent, center + extent, _chunkScratch);
+            for (int i = 0; i < _chunkScratch.Count; i++)
+            {
+                int chunk = _chunkScratch[i];
+                _digScratch.Clear();
+                if (_embers[chunk].ExtractWithin(center, Mathf.Sqrt(reach * reach + World.Size.y * World.Size.y), _digScratch, Locks) == 0)
+                {
+                    continue;
+                }
+
+                bool changed = false;
+                foreach (Ember ember in _digScratch)
+                {
+                    Vector3 offset = ember.Position - center;
+                    offset.y = 0f;
+                    if (offset.magnitude <= radius && World.TryFindTop(ember.Position.x, ember.Position.z, out float top) &&
+                        ember.Position.y >= top - ExposeInset)
+                    {
+                        Vector3 spot = new Vector3(ember.Position.x, top, ember.Position.z);
+                        exposed.Add(new LooseEmber(-1, new Ember(spot, ember.TierIndex, ember.Layer), ember.Position));
+                        changed = true;
+                    }
+                    else
+                    {
+                        _embers[chunk].Add(ember);
+                    }
+                }
+
+                if (changed)
+                {
+                    _embersChanged[chunk] = true;
+                    _emberVersions[chunk]++;
+                }
+            }
+        }
+
+        private void UncoverBlownFinds(Vector3 center, float radius, List<BuriedFind> output)
+        {
+            for (int i = _finds.Count - 1; i >= 0; i--)
+            {
+                BuriedFind find = _finds[i];
+                Vector3 offset = find.Position - center;
+                offset.y = 0f;
+                if (offset.magnitude <= radius && Locks.IsUnlocked(find.Layer) &&
+                    World.TryFindTop(find.Position.x, find.Position.z, out float top) && find.Position.y >= top - ExposeInset * 4f)
+                {
+                    output.Add(find);
+                    _finds.RemoveAt(i);
+                }
+            }
+        }
+
         private void UncoverFindsWithin(Vector3 center, float radius, List<BuriedFind> output)
         {
             float radiusSquared = radius * radius;

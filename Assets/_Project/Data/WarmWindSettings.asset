@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55fc36d0848202e498b5a0d19721fc2e, type: 3}
+  m_Name: WarmWindSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Powers.WarmWindSettings
+  _radius: 2.5
+  _depth: 0.3
+  _cooldown: 60
+  _reach: 15
+  _requiredHeatLevel: 1
+  _gustSpeed: 22
+  _gustStreaks: 70
+  _dustPuffs: 120
+  _gatherShake: 0.25
+  _gustShake: 1.2
+  _gustShakeSeconds: 0.6
+  _gatherSeconds: 0.8

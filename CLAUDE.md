@@ -33,7 +33,9 @@ Phase 2 builds a short, complete slice of the game from the design doc, one comm
   the sieve, A* on a walk grid, jumps onto ledges). Hired and upgraded in the shop (pace, sieve size). Works on her
   own (nearest ash of the outermost open layer) or from a spot the player marks with a green circle (she walks there
   first, then works that layer); outer layers first; waits by the shop and says why when she can't work. Talk with E
-- 2F. One power: Warm Wind (Heat 1), blows loose ash off an area to expose embers
+- 2F. One power: Warm Wind (Heat 1), blows loose ash off an area to expose embers. Hold F 0.8 s, release: a gust
+  strips the top 0.3 m of open ash in a circle (embers lie bare, offerings uncovered); a shorter hold only puffs.
+  Shop tabs Tools / Powers (Powers once a power has come); upgrades for its cooldown and radius
 - 2G. Phoenix silhouette in the nest fire (stages 1–3) and the first valley-thaw stage (placeholder art)
 
 **Still out of scope:** more layers' content, more helpers and powers, feathers, audio polish, real models.
@@ -52,6 +54,7 @@ Assets/
       Nest/            nest, feeding, heat
       Offerings/       offerings found in the ash, the shrine shelf, set bonuses
       Helpers/         Sally the helper: work rules, walk grid and A*, mover, animation, sending her to a spot
+      Powers/          the player's powers (Warm Wind) and their cooldowns
       Economy/         currencies, costs (later)
       UI/              HUD and menus
       Save/            persistence: save file, autosave, terrain snapshots
@@ -154,6 +157,6 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - [x] I can buy the 3 sieves and the mesh in the shop and feel the difference
 - [x] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
 - [ ] Shaking on the beat earns the Clean Sift bonus
-- [ ] A salamander cousin and Warm Wind help me
+- [x] A helper (Sally) and Warm Wind help me
 - [ ] The phoenix silhouette grows in the fire and the valley starts to thaw
 - [ ] Carried over from Phase 1: the frame-rate target holds on real minimum-spec hardware

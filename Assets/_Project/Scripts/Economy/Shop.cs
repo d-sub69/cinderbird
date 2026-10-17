@@ -8,16 +8,33 @@ namespace Cinderbird.Economy
         private readonly Currencies _currencies;
         private readonly UpgradeLevels _levels;
 
+        /// <summary>Fired when what is on sale may have changed without a purchase (the nest reached a Heat level).</summary>
+        public event Action AvailabilityChanged;
+
+        /// <summary>The nest's Heat level: some upgrades go on sale with one.</summary>
+        public int HeatLevel { get; private set; }
+
         public Shop(Currencies currencies, UpgradeLevels levels)
         {
             _currencies = currencies ?? throw new ArgumentNullException(nameof(currencies));
             _levels = levels ?? throw new ArgumentNullException(nameof(levels));
         }
 
-        /// <summary>Whether it is on sale: whatever it requires has been bought.</summary>
+        /// <summary>Whether it is on sale: whatever it requires has been bought, and the nest is warm enough for it.</summary>
         public bool IsAvailable(IUpgrade upgrade)
         {
-            return string.IsNullOrEmpty(upgrade.RequiresId) || _levels.LevelOf(upgrade.RequiresId) > 0;
+            return (string.IsNullOrEmpty(upgrade.RequiresId) || _levels.LevelOf(upgrade.RequiresId) > 0) && HeatLevel >= upgrade.RequiredHeatLevel;
+        }
+
+        public void SetHeatLevel(int level)
+        {
+            if (level == HeatLevel)
+            {
+                return;
+            }
+
+            HeatLevel = level;
+            AvailabilityChanged?.Invoke();
         }
 
         public bool IsMaxed(IUpgrade upgrade)

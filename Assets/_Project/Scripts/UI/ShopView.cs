@@ -25,12 +25,19 @@ namespace Cinderbird.UI
         [SerializeField] private ShopRowView _rowTemplate;
         [SerializeField] private TMP_Text _glowLabel;
         [SerializeField] private Button _closeButton;
+        [Tooltip("Optional: the tab with the tools (sieves, mesh, basket, helpers). Without tabs every upgrade is listed.")]
+        [SerializeField] private Button _toolsTab;
+        [Tooltip("Optional: the tab with the powers; shown once a power has come.")]
+        [SerializeField] private Button _powersTab;
+        [SerializeField] private Color _tabColor = new Color(0.55f, 0.5f, 0.45f, 1f);
+        [SerializeField] private Color _selectedTabColor = new Color(0.93f, 0.9f, 0.86f, 1f);
         [Tooltip("The use key (E): closes the shop again.")]
         [SerializeField] private InputActionReference _closeAction;
 
         private readonly List<ShopRowView> _rows = new List<ShopRowView>();
         private int _openedFrame = -1;
         private int _closedFrame = -1;
+        private UpgradeCategory _tab = UpgradeCategory.Tools;
 
         /// <summary>Fired after a purchase with the upgrade and its new level (for player feedback).</summary>
         public event Action<UpgradeDefinition, int> Purchased;
@@ -50,6 +57,11 @@ namespace Cinderbird.UI
             _menu.SetActive(false);
             _rowTemplate.gameObject.SetActive(false);
             _closeButton.onClick.AddListener(Close);
+            if (_toolsTab != null && _powersTab != null)
+            {
+                _toolsTab.onClick.AddListener(() => ShowTab(UpgradeCategory.Tools));
+                _powersTab.onClick.AddListener(() => ShowTab(UpgradeCategory.Powers));
+            }
             foreach (UpgradeDefinition upgrade in _upgrades.Catalog)
             {
                 if (upgrade == null)
@@ -71,6 +83,10 @@ namespace Cinderbird.UI
             _pause.BackPressed += OnBackPressed;
             _upgrades.Levels.Changed += OnLevelChanged;
             _upgrades.Wallet.Currencies.Changed += Refresh;
+            if (_upgrades.Shop != null)
+            {
+                _upgrades.Shop.AvailabilityChanged += Refresh;
+            }
             if (_closeAction != null)
             {
                 _closeAction.action.Enable();
@@ -83,6 +99,10 @@ namespace Cinderbird.UI
             _pause.BackPressed -= OnBackPressed;
             _upgrades.Levels.Changed -= OnLevelChanged;
             _upgrades.Wallet.Currencies.Changed -= Refresh;
+            if (_upgrades.Shop != null)
+            {
+                _upgrades.Shop.AvailabilityChanged -= Refresh;
+            }
         }
 
         /// <summary>Opens the shop if the game is being played (not paused, not in another menu).</summary>
@@ -143,10 +163,52 @@ namespace Cinderbird.UI
             }
 
             _glowLabel.text = $"Glow {_upgrades.Wallet.Currencies.Glow:N0}";
+            Shop shop = _upgrades.Shop;
+            bool tabs = _toolsTab != null && _powersTab != null;
+            if (tabs)
+            {
+                RefreshTabs(shop);
+            }
+
             foreach (ShopRowView row in _rows)
             {
-                row.Refresh();
+                // Only what is on sale (a helper's upgrades once she is hired, a power's once it has come), on this tab.
+                bool shown = shop.IsAvailable(row.Upgrade) && (!tabs || row.Upgrade.Category == _tab);
+                if (row.gameObject.activeSelf != shown)
+                {
+                    row.gameObject.SetActive(shown);
+                }
+
+                if (shown)
+                {
+                    row.Refresh();
+                }
             }
+        }
+
+        private void ShowTab(UpgradeCategory tab)
+        {
+            _tab = tab;
+            Refresh();
+        }
+
+        // The Powers tab shows once a power has come (any of its upgrades is on sale); the open tab is highlighted.
+        private void RefreshTabs(Shop shop)
+        {
+            bool anyPower = false;
+            foreach (ShopRowView row in _rows)
+            {
+                anyPower |= row.Upgrade.Category == UpgradeCategory.Powers && shop.IsAvailable(row.Upgrade);
+            }
+
+            _powersTab.gameObject.SetActive(anyPower);
+            if (!anyPower)
+            {
+                _tab = UpgradeCategory.Tools;
+            }
+
+            _toolsTab.image.color = _tab == UpgradeCategory.Tools ? _selectedTabColor : _tabColor;
+            _powersTab.image.color = _tab == UpgradeCategory.Powers ? _selectedTabColor : _tabColor;
         }
 
         // Pausing (Esc is handled below, focus loss here) closes the shop; it reopens from the stall.
