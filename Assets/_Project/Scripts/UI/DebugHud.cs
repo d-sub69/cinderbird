@@ -11,6 +11,7 @@ using Cinderbird.Powers;
 using Cinderbird.Save;
 using Cinderbird.Sifting;
 using Cinderbird.Terrain;
+using Cinderbird.Valley;
 using TMPro;
 using UnityEngine;
 
@@ -61,6 +62,10 @@ namespace Cinderbird.UI
         [SerializeField] private HelperAssignController _assign;
         [Tooltip("Optional: shows whether the Warm Wind is ready, and its messages.")]
         [SerializeField] private WarmWind _warmWind;
+        [Tooltip("Optional: tells when the phoenix takes a new shape in the fire.")]
+        [SerializeField] private PhoenixView _phoenix;
+        [Tooltip("Optional: tells when the valley thaws.")]
+        [SerializeField] private ValleyThaw _valley;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -153,6 +158,16 @@ namespace Cinderbird.UI
                 _warmWind.Changed += MarkDirty;
                 _warmWind.Notice += ShowMessage;
             }
+
+            if (_phoenix != null)
+            {
+                _phoenix.Notice += ShowStoryMoment;
+            }
+
+            if (_valley != null)
+            {
+                _valley.Notice += ShowStoryMoment;
+            }
         }
 
         private void OnDisable()
@@ -222,6 +237,16 @@ namespace Cinderbird.UI
             {
                 _warmWind.Changed -= MarkDirty;
                 _warmWind.Notice -= ShowMessage;
+            }
+
+            if (_phoenix != null)
+            {
+                _phoenix.Notice -= ShowStoryMoment;
+            }
+
+            if (_valley != null)
+            {
+                _valley.Notice -= ShowStoryMoment;
             }
         }
 
@@ -406,6 +431,7 @@ namespace Cinderbird.UI
                 .Append(" (").AppendInt(Mathf.FloorToInt(_nest.Progress * 100f)).Append("%)");
 
             AppendHeatLevel();
+            AppendPhoenixStage();
             AppendHelper();
             AppendWarmWind();
             AppendPourPrompt();
@@ -551,6 +577,23 @@ namespace Cinderbird.UI
             }
 
             _builder.Append("   Right-click: cancel");
+        }
+
+        // For testing: which phoenix stage shows, next to the Heat level it follows.
+        private void AppendPhoenixStage()
+        {
+            if (_phoenix == null || !DevTools.Enabled)
+            {
+                return;
+            }
+
+            _builder.AppendLine().Append("  [debug] phoenix stage ").AppendInt(_phoenix.Stage);
+        }
+
+        // The phoenix and the valley changing are the story moving on: their lines stay a little longer.
+        private void ShowStoryMoment(string message)
+        {
+            ShowMessage(message, FoundCardDuration);
         }
 
         private void OnLevelReached(int level)

@@ -50,6 +50,12 @@ namespace Cinderbird.Nest
             }
         }
 
+        /// <summary>Makes the fire flare up, as a big moment (the phoenix taking shape) would.</summary>
+        public void Flare(float amount)
+        {
+            _fire?.AddFlare(amount);
+        }
+
         private void OnHeatRestored(int heat)
         {
             _landedHeat = heat;

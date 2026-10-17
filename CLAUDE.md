@@ -36,7 +36,10 @@ Phase 2 builds a short, complete slice of the game from the design doc, one comm
 - 2F. One power: Warm Wind (Heat 1), blows loose ash off an area to expose embers. Hold F 0.8 s, release: a gust
   strips the top 0.3 m of open ash in a circle (embers lie bare, offerings uncovered); a shorter hold only puffs.
   Shop tabs Tools / Powers (Powers once a power has come); upgrades for its cooldown and radius
-- 2G. Phoenix silhouette in the nest fire (stages 1–3) and the first valley-thaw stage (placeholder art)
+- 2G. Phoenix silhouette in the nest fire (stages 1–3) and the first valley-thaw stage (placeholder art). The
+  summit ends in a cliff behind the nest; the valley lies 35 m below (village, river). The phoenix is flames rising
+  off a bird-shaped mesh, redder and lower early, golden and high at stage 3; at Heat 2 a patch of the valley thaws,
+  a stretch of river runs and a window lights up
 
 **Still out of scope:** more layers' content, more helpers and powers, feathers, audio polish, real models.
 
@@ -55,6 +58,7 @@ Assets/
       Offerings/       offerings found in the ash, the shrine shelf, set bonuses
       Helpers/         Sally the helper: work rules, walk grid and A*, mover, animation, sending her to a spot
       Powers/          the player's powers (Warm Wind) and their cooldowns
+      Valley/          the valley below the summit: its placeholder landform and its thaw by Heat level
       Economy/         currencies, costs (later)
       UI/              HUD and menus
       Save/            persistence: save file, autosave, terrain snapshots
@@ -158,5 +162,5 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
 - [x] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
 - [ ] Shaking on the beat earns the Clean Sift bonus
 - [x] A helper (Sally) and Warm Wind help me
-- [ ] The phoenix silhouette grows in the fire and the valley starts to thaw
+- [x] The phoenix silhouette grows in the fire and the valley starts to thaw
 - [ ] Carried over from Phase 1: the frame-rate target holds on real minimum-spec hardware
