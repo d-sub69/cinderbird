@@ -16,32 +16,27 @@ upgrades tools until every ember is found. Final ember = phoenix reborn = game e
 - TextMeshPro for UI text
 - Git + Git LFS for binary assets
 
-## Current phase: Phase 2 — vertical slice
+## Current phase: Phase 3 — the whole game, start to credits (placeholder content)
 Done and playtested: Prototype 1 (core loop), Prototype 2 (tools, inventory, placeable basket, hidden embers,
 ash pour), Phase 1 (multi-chunk Burst terrain, ash layers, save system, game shell with pause/options,
-performance budget) and ash settling (scoops drain while walls slide in, flying embers).
+performance budget), ash settling (scoops drain while walls slide in, flying embers) and Phase 2, the vertical
+slice: Heat levels 1–3 opening layers by the design rule, the shop stall (3 sieves, the mesh, power upgrades, tabs),
+5 offerings and the shrine shelf, Sally the helper (walks, scoops, shakes, feeds; A* on a walk grid; sent to a spot
+with a green circle), the Warm Wind power (hold F 0.8 s), the phoenix silhouette in the fire and the valley's
+first thaw. Run `Docs/PerformanceTest.md` with the F7 scenario key.
 
-Phase 2 builds a short, complete slice of the game from the design doc, one committed step each:
-- 2A. Heat levels 1–3 from data; layers unlock by the design rule (90% of the layers above cleared + a Heat
-  level) instead of the F4 debug key (kept for testing); HUD shows level and progress
-- 2B. Shop stall at the nest (look + E): Glow buys upgrades, cost = base × 1.15^level; 3 sieves (scoop size)
-  and the mesh (catch more embers); upgrade levels saved
-- 2C. 5 offerings with lore, found in the ash; sell or place on the shrine shelf; a shelf set bonus
-- 2D. Rhythm shake: the nest pulses; shaking on the beat builds the Clean Sift bonus up to ×1.5 Glow, never
-  punished off-beat. **Deferred** (skipped for now at Art's call; to be picked up later)
-- 2E. One helper: Sally, a salamander who walks, scoops, shakes and feeds the nest like the player (her own copy of
-  the sieve, A* on a walk grid, jumps onto ledges). Hired and upgraded in the shop (pace, sieve size). Works on her
-  own (nearest ash of the outermost open layer) or from a spot the player marks with a green circle (she walks there
-  first, then works that layer); outer layers first; waits by the shop and says why when she can't work. Talk with E
-- 2F. One power: Warm Wind (Heat 1), blows loose ash off an area to expose embers. Hold F 0.8 s, release: a gust
-  strips the top 0.3 m of open ash in a circle (embers lie bare, offerings uncovered); a shorter hold only puffs.
-  Shop tabs Tools / Powers (Powers once a power has come); upgrades for its cooldown and radius
-- 2G. Phoenix silhouette in the nest fire (stages 1–3) and the first valley-thaw stage (placeholder art). The
-  summit ends in a cliff behind the nest; the valley lies 35 m below (village, river). The phoenix is flames rising
-  off a bird-shaped mesh, redder and lower early, golden and high at stage 3; at Heat 2 a patch of the valley thaws,
-  a stretch of river runs and a window lights up
+Phase 3 builds the full 3–5 hour curve on cheap placeholders so the economy can be balanced before content and art
+(Phase 4: offerings, feathers' story, models, audio; Phase 5: demo and release). One committed step each:
+- 3A. Heat levels 1–10 and layers 3–6 by the design rule; ember tiers placed per layer as in the design doc
+- 3B. The rest of the upgrades: sieves up to the enchanted winnow, bigger baskets, the ember chute
+- 3C. Obstacles, never punishments: cinder glass, obsidian, wet ash; the pick and gloves
+- 3D. The remaining powers: Heat Sight, Kiln Breath, Ember Call, Spirit Birds, Rising Sun
+- 3E. The remaining helpers: ash moths, fire beetle, stone tortoise
+- 3F. Feathers (system, placeholder memories), phoenix stages and valley thaw for every Heat level
+- 3G. The finale: the Heart Ember, rebirth, spring, credits, free play
+- 3H. Balance pass (a tested pacing simulator, a full playthrough) and the minimum-spec performance run
 
-**Still out of scope:** more layers' content, more helpers and powers, feathers, audio polish, real models.
+**Still out of scope:** real offering/feather content, real models, audio beyond placeholders, the demo build.
 
 ## Folder structure
 ```
@@ -156,11 +151,10 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   with source URL and license **in the same commit** it is added.
 - Prefer CC0 (Kenney, Quaternius, Poly Haven, ambientCG). CC-BY is fine with credit. No "non-commercial" licenses.
 
-## Definition of done — Phase 2
-- [x] Heat levels 1–3 work and open layer 2 by the design rule; the HUD shows where I stand
-- [x] I can buy the 3 sieves and the mesh in the shop and feel the difference
-- [x] I find offerings, read their lore, sell them or put them on the shelf; a set gives its bonus
-- [ ] Shaking on the beat earns the Clean Sift bonus
-- [x] A helper (Sally) and Warm Wind help me
-- [x] The phoenix silhouette grows in the fire and the valley starts to thaw
+## Definition of done — Phase 3
+- [ ] I can play from the first spark to the credits: Heat 1–10, all six layers, every ember tier
+- [ ] Every upgrade, power, helper and obstacle from the design doc works (placeholder looks)
+- [ ] Feathers can be found; the phoenix and the valley change at every Heat level
+- [ ] Placing the Heart Ember ends the game with the rebirth, then free play
+- [ ] A full playthrough takes 3–5 hours and the upgrade pacing hits the design doc's targets
 - [ ] Carried over from Phase 1: the frame-rate target holds on real minimum-spec hardware

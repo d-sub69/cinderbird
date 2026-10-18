@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace Cinderbird.Economy
 {
     /// <summary>
-    /// Extra Glow and Heat from feeding the nest, in percent, from any number of named sources (a shelf set now; the
-    /// Clean Sift rhythm bonus later). Fractions are carried over between feedings, so +10% on single sparks isn't lost
+    /// Extra Glow and Heat from feeding the nest, in percent, from any number of named sources (e.g. shelf sets).
+    /// Fractions are carried over between feedings, so +10% on single sparks isn't lost
     /// to rounding.
     /// </summary>
     public sealed class FeedBonuses

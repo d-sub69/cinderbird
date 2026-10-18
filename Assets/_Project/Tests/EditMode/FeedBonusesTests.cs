@@ -46,11 +46,11 @@ namespace Cinderbird.Tests.EditMode
         {
             FeedBonuses bonuses = new FeedBonuses();
             bonuses.Set("set:a", 10f, 0f);
-            bonuses.Set("rhythm", 25f, 5f);
+            bonuses.Set("set:b", 25f, 5f);
 
             Assert.That(bonuses.GlowPercent, Is.EqualTo(35f));
             Assert.That(bonuses.HeatPercent, Is.EqualTo(5f));
-            bonuses.Set("rhythm", 0f, 0f);
+            bonuses.Set("set:b", 0f, 0f);
             Assert.That(bonuses.GlowPercent, Is.EqualTo(10f));
             Assert.That(bonuses.HeatPercent, Is.Zero);
         }

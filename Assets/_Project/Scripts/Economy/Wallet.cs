@@ -10,7 +10,7 @@ namespace Cinderbird.Economy
     {
         public Currencies Currencies { get; } = new Currencies();
 
-        /// <summary>Extra Glow and Heat from feeding (shelf sets, later the rhythm bonus).</summary>
+        /// <summary>Extra Glow and Heat from feeding (e.g. shelf sets).</summary>
         public FeedBonuses Bonuses { get; } = new FeedBonuses();
     }
 }
