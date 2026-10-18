@@ -153,13 +153,13 @@ namespace Cinderbird.Terrain
                 return;
             }
 
-            VoxelWorld world = new VoxelWorld(
-                _settings.ChunkCells, _settings.ChunksX, _settings.ChunksY, _settings.ChunksZ,
-                _settings.CellSize, _settings.WorldOrigin);
-            int layerCount = _layerCatalog != null ? Math.Max(1, _layerCatalog.Count) : 1;
-            _terrain = new AshTerrain(world, layerCount);
-            _terrain.Generate(_settings.PileShape, _layerCatalog != null ? _layerCatalog.CreateLayout() : null);
-            SpawnEmbers();
+            if (_emberSpawnSettings == null || _tierCatalog == null)
+            {
+                Debug.LogWarning($"{nameof(VoxelTerrain)} on '{name}' has no ember settings; the mountain will be empty.", this);
+            }
+
+            _terrain = MountainBuilder.Build(_settings, _layerCatalog, _emberSpawnSettings, _tierCatalog);
+            VoxelWorld world = _terrain.World;
             Fingerprint = TerrainFingerprint.Build(_settings, _layerCatalog);
             if (_layerCatalog != null)
             {
@@ -480,33 +480,6 @@ namespace Cinderbird.Terrain
         public string LayerName(int layer)
         {
             return _layerCatalog != null ? _layerCatalog.NameOf(layer) : $"Layer {layer + 1}";
-        }
-
-        private void SpawnEmbers()
-        {
-            if (_emberSpawnSettings == null || _tierCatalog == null)
-            {
-                Debug.LogWarning($"{nameof(VoxelTerrain)} on '{name}' has no ember settings; the mountain will be empty.", this);
-                return;
-            }
-
-            if (_layerCatalog != null)
-            {
-                EmberSpawnParameters parameters = _emberSpawnSettings.ToParameters();
-                _terrain.SpawnLayeredEmbers(_layerCatalog.CreateSpawnTable(_tierCatalog.Count), parameters.Seed, parameters.MinDensity);
-                // Exactly one Heart Ember, at the center of the innermost pocket.
-                if (_layerCatalog.Count > 1)
-                {
-                    _terrain.PlaceEmber(new Ember(_layerCatalog.PocketCenter, _layerCatalog.HeartTierIndex, (byte)(_layerCatalog.Count - 1)));
-                }
-
-                return;
-            }
-
-            // One-off at startup, so the temporary list is fine.
-            List<float> weights = new List<float>();
-            _tierCatalog.CopySpawnWeights(weights);
-            _terrain.SpawnEmbers(_emberSpawnSettings.ToParameters(), weights);
         }
 
         private void OnDrawGizmosSelected()

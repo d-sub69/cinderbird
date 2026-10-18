@@ -26,17 +26,27 @@ with a green circle), the Warm Wind power (hold F 0.8 s), the phoenix silhouette
 first thaw. Run `Docs/PerformanceTest.md` with the F7 scenario key.
 
 Phase 3 builds the full 3–5 hour curve on cheap placeholders so the economy can be balanced before content and art
-(Phase 4: offerings, feathers' story, models, audio; Phase 5: demo and release). One committed step each:
-- 3A. Heat levels 1–10 and layers 3–6 by the design rule; ember tiers placed per layer as in the design doc
-- 3B. The rest of the upgrades: sieves up to the enchanted winnow, bigger baskets, the ember chute
-- 3C. Obstacles, never punishments: cinder glass, obsidian, wet ash; the pick and gloves
-- 3D. The remaining powers: Heat Sight, Kiln Breath, Ember Call, Spirit Birds, Rising Sun
-- 3E. The remaining helpers: ash moths, fire beetle, stone tortoise
-- 3F. Feathers (system, placeholder memories), phoenix stages and valley thaw for every Heat level
-- 3G. The finale: the Heart Ember, rebirth, spring, credits, free play
-- 3H. Balance pass (a tested pacing simulator, a full playthrough) and the minimum-spec performance run
+(Phase 4: offerings, feathers' story, models, audio; Phase 5: demo and release).
+The arc runs from careful to plentiful (design doc v0.2): embers lie in veins, so early you read the mountain and follow
+thin veins and late you, your helpers and your powers tear through rich ash; digging power grows from about 3 to 100+
+m³/min. Main path about 3–3.5 h (Cold Crust ~25 min, Ember Vein ~35, Fire Mantle ~45, Blaze Shroud ~35, Starfire
+Deep ~35, Heart Hollow ~15), 4–4.5 h with 100%. Scope: 12 feathers, 25 offerings (five sets), no wet ash, no offline
+progress. One committed step each:
+- 3A. Pacing foundation: `[Pace]` lines in the game log (embers, m³ and Glow per minute, time per layer) and a tested
+  pacing simulator that reads the real data assets and prints the whole run's timeline (Cinderbird → Report); then a
+  20-minute real-speed playtest (Test Mode off) calibrates it. Every later step is tuned with it
+- 3B. Veins: embers placed in veins per layer (data: count, size, richness, sprinkle), glimmers hint them, Sally
+  targets vein ash, a bigger Heart Hollow
+- 3C. Heat levels 1–10 with thresholds from the simulator; tier mixes for layers 3–6; HUD for all ten levels
+- 3D. Digging scale: sieves 4–6, the weave (faster shaking), sieve capacity, baskets, the ember chute, price curves
+- 3E. The remaining powers: Heat Sight (shows veins) first, then Kiln Breath, Ember Call, Spirit Birds, Rising Sun
+- 3F. The remaining helpers: two of Sally's cousins, ash moths (carry), fire beetle (cracks glass)
+- 3G. Obstacles, never punishments: cinder glass crusts guarding veins, obsidian chunks
+- 3H. Feathers (12, placeholder memories), phoenix stages and valley thaw for every Heat level
+- 3I. The finale: the Heart Ember, rebirth, spring, credits, free play
+- 3J. Balance pass (simulator plus a full playthrough) and the minimum-spec performance run
 
-**Still out of scope:** real offering/feather content, real models, audio beyond placeholders, the demo build.
+**Still out of scope:** real offering and feather content, real models, audio beyond placeholders, the demo build.
 
 ## Folder structure
 ```
@@ -54,6 +64,7 @@ Assets/
       Helpers/         Sally the helper: work rules, walk grid and A*, mover, animation, sending her to a spot
       Powers/          the player's powers (Warm Wind) and their cooldowns
       Valley/          the valley below the summit: its placeholder landform and its thaw by Heat level
+      Pacing/          pacing log for playtests (pace.log) and the pacing simulator (Cinderbird → Report → Mountain Pacing)
       Economy/         currencies, costs (later)
       UI/              HUD and menus
       Save/            persistence: save file, autosave, terrain snapshots
@@ -65,7 +76,7 @@ Assets/
     Textures/
     Audio/
     Settings/          input actions and other project-level config assets
-    Editor/            editor-only setup tooling (menu Cinderbird → Setup → …), namespace Cinderbird.EditorTools
+    Editor/            editor-only tooling (menus Cinderbird → Setup → … and Cinderbird → Report → …), namespace Cinderbird.EditorTools
     Tests/
       EditMode/        unit tests for pure C# logic (must be under Assets/ for Unity to compile them)
       PlayMode/        smoke tests on the real Main scene (start-up, dig chain); saves go to a temp folder

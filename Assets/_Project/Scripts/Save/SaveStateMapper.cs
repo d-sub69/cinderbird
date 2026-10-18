@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Cinderbird.Core;
 using Cinderbird.Economy;
 using Cinderbird.Embers;
 using Cinderbird.Helpers;
@@ -29,6 +30,7 @@ namespace Cinderbird.Save
         private readonly Upgrades _upgrades;
         private readonly Shrine _shrine;
         private readonly Sally _sally;
+        private readonly PlayClock _playClock;
         private readonly List<OfferingState> _stateBuffer = new List<OfferingState>();
         private readonly List<KeyValuePair<string, int>> _levelBuffer = new List<KeyValuePair<string, int>>();
         private readonly List<ToolDefinition> _slotBuffer = new List<ToolDefinition>();
@@ -38,8 +40,9 @@ namespace Cinderbird.Save
 
         public SaveStateMapper(VoxelTerrain pile, Wallet wallet, FirstPersonController player, ToolBelt toolBelt,
             Sieve sieve, SieveFiller sieveFiller, Basket basket, PlaceableTool[] placeableTools, Upgrades upgrades, Shrine shrine,
-            Sally sally)
+            Sally sally, PlayClock playClock = null)
         {
+            _playClock = playClock;
             _pile = pile;
             _wallet = wallet;
             _player = player;
@@ -84,6 +87,7 @@ namespace Cinderbird.Save
             file.Terrain.DeepestUnlockedLayer = _pile.DeepestUnlockedLayer;
             file.Currencies.Glow = _wallet.Currencies.Glow;
             file.Currencies.Heat = _wallet.Currencies.Heat;
+            file.PlaySeconds = _playClock != null ? _playClock.Seconds : 0.0;
             file.Player.Pose = _player.Pose;
             CaptureTools(file.Tools);
             CaptureSieve(file.Sieve);
@@ -141,6 +145,7 @@ namespace Cinderbird.Save
             }
 
             _wallet.Currencies.Restore(Math.Max(0, file.Currencies.Glow), Math.Max(0, file.Currencies.Heat));
+            _playClock?.Restore(file.PlaySeconds);
             // Before the sieve and basket: their upgrades set the capacities the saved embers go into.
             RestoreUpgrades(file.Upgrades);
             RestoreOfferings(file.Offerings);

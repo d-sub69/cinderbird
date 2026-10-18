@@ -111,6 +111,9 @@ namespace Cinderbird.Helpers
         /// <summary>Her mode, layer or what she is doing changed (for the HUD).</summary>
         public event Action Changed;
 
+        /// <summary>Fired when she scooped ash or embers from the pile, with what she took (for the pacing log).</summary>
+        public event Action<DigResult> Scooped;
+
         public bool IsHired => _hired;
 
         public HelperMode Mode { get; private set; } = HelperMode.Auto;
@@ -531,6 +534,7 @@ namespace Cinderbird.Helpers
                 return;
             }
 
+            Scooped?.Invoke(result);
             _pile.MixLayerColors(removedByLayer, out Color ashColor, out Color dustColor);
             _filler.TryBegin(result.RemovedVolume, _extracted, spot, ashColor, dustColor);
             _animation.Scoop(spot, pourSeconds);

@@ -39,6 +39,9 @@ namespace Cinderbird.Player
         /// <summary>Fired when a click on the pile is refused, with the reason (for player feedback).</summary>
         public event System.Action<ScoopRefusal> ScoopRefused;
 
+        /// <summary>Fired when a scoop took ash or embers from the pile, with what it took (for the pacing log).</summary>
+        public event System.Action<DigResult> Scooped;
+
         /// <summary>True when the view ray hits diggable ash or a loose ember within reach this frame.</summary>
         public bool HasTarget => _targetTerrain != null || _aimedLooseId >= 0;
 
@@ -166,6 +169,7 @@ namespace Cinderbird.Player
                 return;
             }
 
+            Scooped?.Invoke(result);
             _targetTerrain.MixLayerColors(removedByLayer, out Color ashColor, out Color dustColor);
 
             // Test mode can drop the ash on the way: the pile still loses it, but the sieve gets only the embers.

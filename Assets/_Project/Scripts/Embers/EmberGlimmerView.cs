@@ -63,6 +63,7 @@ namespace Cinderbird.Embers
                 _terrain.SettleFinished += OnSettled;
                 _terrain.Built += OnTerrainBuilt;
                 _terrain.Restored += OnTerrainBuilt;
+                _terrain.LayerUnlocked += OnLayerUnlocked;
                 if (_terrain.IsBuilt)
                 {
                     OnTerrainBuilt();
@@ -79,7 +80,14 @@ namespace Cinderbird.Embers
                 _terrain.SettleFinished -= OnSettled;
                 _terrain.Built -= OnTerrainBuilt;
                 _terrain.Restored -= OnTerrainBuilt;
+                _terrain.LayerUnlocked -= OnLayerUnlocked;
             }
+        }
+
+        // The opened layer's embers near the surface start to glimmer: part of the layer melting open. Rare, so a full rescan.
+        private void OnLayerUnlocked(int layer)
+        {
+            OnTerrainBuilt();
         }
 
         // Also after a save is restored: whole chunks of ash and embers changed at once.
@@ -327,6 +335,12 @@ namespace Cinderbird.Embers
         private void TryAddCandidate(AshTerrain terrain, Ember ember, List<GlimmerPoint> candidates)
         {
             if (ember.TierIndex < 0 || ember.TierIndex >= _tierCatalog.Count || _tierCatalog[ember.TierIndex] == null)
+            {
+                return;
+            }
+
+            // A sealed layer's embers can't be scooped yet, so showing them would only tease; they appear when it opens.
+            if (!terrain.Locks.IsUnlocked(ember.Layer))
             {
                 return;
             }

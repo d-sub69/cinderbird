@@ -54,6 +54,9 @@ namespace Cinderbird.Powers
         /// <summary>Whether it is unlocked, ready or not changed (for the HUD).</summary>
         public event Action Changed;
 
+        /// <summary>Fired when a gust struck the pile, with the ash it blew away (for the pacing log).</summary>
+        public event Action<DigResult> Gusted;
+
         public bool IsUnlocked => _heat != null && _heat.Level >= _settings.RequiredHeatLevel;
 
         /// <summary>Seconds until it can be called again; 0 when ready.</summary>
@@ -211,7 +214,12 @@ namespace Cinderbird.Powers
         private void Strike()
         {
             _gustInFlight = false;
-            _pile.Blow(_strikePoint, CurrentRadius, _settings.Depth);
+            DigResult blown = _pile.Blow(_strikePoint, CurrentRadius, _settings.Depth);
+            if (blown.RemovedAnyAsh)
+            {
+                Gusted?.Invoke(blown);
+            }
+
             EmitDust(_strikePoint);
             _shake.Kick(_settings.GustShake, _settings.GustShakeSeconds);
         }

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d911ff55eb0be94babe52b239efbf5f, type: 3}
+  m_Name: PacingProfile
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Pacing.PaceProfile
+  _scoopOverheadSeconds: 1
+  _shakeEnergy: 0.85
+  _activeShare: 0.95
+  _tripSeconds: 20
+  _shopSeconds: 20
+  _windUse: 0.6
+  _windCoverage: 0.85
+  _helperTripSeconds: 25
+  _outerShare: 0.15
+  _slippedPickedUp: 0.5
+  _findBonus: 2
+  _maxHours: 15

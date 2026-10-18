@@ -61,6 +61,8 @@ namespace Cinderbird.Save
         [SerializeField] private Shrine _shrine;
         [Tooltip("Optional: saves the helper (Sally): her mode, where she stands and her sieve.")]
         [SerializeField] private Sally _sally;
+        [Tooltip("Optional: saves the time played.")]
+        [SerializeField] private PlayClock _playClock;
 
         [Header("Debug keys")]
         [SerializeField] private InputActionReference _saveAction;
@@ -129,7 +131,8 @@ namespace Cinderbird.Save
 
             string folder = _testFolder ?? Path.Combine(Application.persistentDataPath, _settings.FolderName);
             _slot = new SaveSlot(new SaveFileStore(folder, _settings.FileName));
-            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades, _shrine, _sally);
+            _state = new SaveStateMapper(_pile, _wallet, _player, _toolBelt, _sieve, _sieveFiller, _basket, _placeableTools, _upgrades, _shrine, _sally,
+                _playClock);
         }
 
         private void OnEnable()

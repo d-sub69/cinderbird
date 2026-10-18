@@ -7598,6 +7598,7 @@ GameObject:
   m_Component:
   - component: {fileID: 354520939}
   - component: {fileID: 354520938}
+  - component: {fileID: 354520940}
   m_Layer: 0
   m_Name: SaveSystem
   m_TagString: Untagged
@@ -7632,6 +7633,7 @@ MonoBehaviour:
   _upgrades: {fileID: 1167973328}
   _shrine: {fileID: 1625579079}
   _sally: {fileID: 1634494048}
+  _playClock: {fileID: 354520940}
   _saveAction: {fileID: 4872094074733735819, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
   _loadAction: {fileID: 1108689290045709862, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
   _resetAction: {fileID: -904051574137934914, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
@@ -7650,6 +7652,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &354520940
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 354520937}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dce9d69d93981144998fdc7d5229b1c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Core.PlayClock
 --- !u!1 &356077066
 GameObject:
   m_ObjectHideFlags: 0
@@ -29630,6 +29644,61 @@ RectTransform:
   m_AnchoredPosition: {x: 20, y: -20}
   m_SizeDelta: {x: 700, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1425974761
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1425974763}
+  - component: {fileID: 1425974762}
+  m_Layer: 0
+  m_Name: Pacing Log
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1425974762
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1425974761}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c2571fee0be66d44a1f70b05f338eda, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Pacing.PaceLog
+  _clock: {fileID: 354520940}
+  _scoop: {fileID: 1069582112}
+  _nest: {fileID: 1752160253}
+  _heat: {fileID: 1752160257}
+  _wallet: {fileID: 1069582113}
+  _pile: {fileID: 273172401}
+  _sally: {fileID: 1634494048}
+  _warmWind: {fileID: 1069582122}
+  _shop: {fileID: 1272666095}
+  _testMode: {fileID: 11400000, guid: 81620a796706cdf428e4805d9fbd09b5, type: 2}
+  _interval: 60
+--- !u!4 &1425974763
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1425974761}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1436642048
 GameObject:
   m_ObjectHideFlags: 0
@@ -50830,3 +50899,4 @@ SceneRoots:
   - {fileID: 732809758}
   - {fileID: 46376969}
   - {fileID: 2143947834}
+  - {fileID: 1425974763}

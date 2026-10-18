@@ -11,7 +11,8 @@ namespace Cinderbird.Save
     public sealed class SaveFile
     {
         // 2: loose embers in the terrain save. 3: upgrades bought in the shop. 4: offerings found. 5: the helper (Sally).
-        public const int CurrentVersion = 5;
+        // 6: time played.
+        public const int CurrentVersion = 6;
 
         // Field names are the JSON keys: renaming one breaks older saves unless the migrator handles it.
         [SerializeField] private int _version = CurrentVersion;
@@ -25,6 +26,7 @@ namespace Cinderbird.Save
         [SerializeField] private UpgradesSave _upgrades = new UpgradesSave();
         [SerializeField] private OfferingsSave _offerings = new OfferingsSave();
         [SerializeField] private HelperSave _helper = new HelperSave();
+        [SerializeField] private double _playSeconds;
 
         public int Version { get => _version; set => _version = value; }
 
@@ -41,5 +43,8 @@ namespace Cinderbird.Save
         public OfferingsSave Offerings => _offerings;
 
         public HelperSave Helper => _helper;
+
+        /// <summary>Seconds this game has been played, across sessions.</summary>
+        public double PlaySeconds { get => _playSeconds; set => _playSeconds = value; }
     }
 }
