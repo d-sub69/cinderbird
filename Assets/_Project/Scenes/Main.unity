@@ -8725,7 +8725,6 @@ MonoBehaviour:
   _flames: {fileID: 407516130}
   _viewer: {fileID: 330585546}
   _fire: {fileID: 1752160251}
-  _flameColor: {r: 1, g: 0.62, b: 0.25, a: 1}
 --- !u!199 &407516129
 ParticleSystemRenderer:
   serializedVersion: 7
@@ -35959,6 +35958,7 @@ GameObject:
   - component: {fileID: 1533965564}
   - component: {fileID: 1533965563}
   - component: {fileID: 1533965562}
+  - component: {fileID: 1533965567}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -36002,6 +36002,7 @@ MonoBehaviour:
   _warmWind: {fileID: 1069582122}
   _phoenix: {fileID: 407516128}
   _valley: {fileID: 2143947833}
+  _perfScenario: {fileID: 1533965567}
 --- !u!114 &1533965563
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -36090,6 +36091,26 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &1533965567
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1533965561}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26241ca170e96d74ab2feae6ac20c2e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.UI.PerfScenarioKey
+  _action: {fileID: -2625335041394529347, guid: b5d7f51c42ab12d44af6b019a9c42787, type: 3}
+  _wallet: {fileID: 1069582113}
+  _upgrades: {fileID: 1167973328}
+  _heat: {fileID: 1752160257}
+  _heatLevel: 3
+  _glow: 5000
+  _upgradesToOwn:
+  - {fileID: 11400000, guid: 854048ea07c81ad4984d5be8e0307a2d, type: 2}
 --- !u!1 &1540890745
 GameObject:
   m_ObjectHideFlags: 0

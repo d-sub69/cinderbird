@@ -235,6 +235,16 @@
                     "interactions": "",
                     "initialStateCheck": false,
                     "priority": 0
+                },
+                {
+                    "name": "PerfScenario",
+                    "type": "Button",
+                    "id": "4ed7aed8-26b4-4c6a-8c85-a0cea4fff9da",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
                 }
             ],
             "bindings": [
@@ -708,6 +718,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "Power",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "068479d2-4cab-47df-a27d-0b98eb08c722",
+                    "path": "<Keyboard>/f7",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "PerfScenario",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

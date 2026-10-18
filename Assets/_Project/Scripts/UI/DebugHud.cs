@@ -66,6 +66,8 @@ namespace Cinderbird.UI
         [SerializeField] private PhoenixView _phoenix;
         [Tooltip("Optional: tells when the valley thaws.")]
         [SerializeField] private ValleyThaw _valley;
+        [Tooltip("Optional: confirms the performance scenario key (F7).")]
+        [SerializeField] private PerfScenarioKey _perfScenario;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -168,6 +170,11 @@ namespace Cinderbird.UI
             {
                 _valley.Notice += ShowStoryMoment;
             }
+
+            if (_perfScenario != null)
+            {
+                _perfScenario.Notice += ShowMessage;
+            }
         }
 
         private void OnDisable()
@@ -247,6 +254,11 @@ namespace Cinderbird.UI
             if (_valley != null)
             {
                 _valley.Notice -= ShowStoryMoment;
+            }
+
+            if (_perfScenario != null)
+            {
+                _perfScenario.Notice -= ShowMessage;
             }
         }
 
