@@ -889,7 +889,7 @@ namespace Cinderbird.Terrain
                 _terrain.MoveLoose(looseIndex, position);
             }
 
-            _embers[index] = tracked.StoredAs(new Ember(position, current.TierIndex, current.Layer), -1);
+            _embers[index] = tracked.StoredAs(current.MovedTo(position), -1);
         }
 
         // Re-places every tracked ember whose column changed, buried at its place in the column's ash.
@@ -925,7 +925,7 @@ namespace Cinderbird.Terrain
                 sampleY = Mathf.Max(_base[i] - 0.5f, Mathf.Min(sampleY, height - EmberMinDepth));
 
                 Vector3 position = world.Origin + new Vector3(gx + tracked.Offset.x, sampleY, gz + tracked.Offset.y) * world.CellSize;
-                Ember moved = new Ember(position, tracked.Ember.TierIndex, tracked.Ember.Layer);
+                Ember moved = tracked.Ember.MovedTo(position);
                 if (moved.Position.Equals(tracked.Ember.Position))
                 {
                     continue;

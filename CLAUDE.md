@@ -27,24 +27,27 @@ first thaw. Run `Docs/PerformanceTest.md` with the F7 scenario key.
 
 Phase 3 builds the full 3–5 hour curve on cheap placeholders so the economy can be balanced before content and art
 (Phase 4: offerings, feathers' story, models, audio; Phase 5: demo and release).
-The arc runs from careful to plentiful (design doc v0.2): embers lie in veins, so early you read the mountain and follow
-thin veins and late you, your helpers and your powers tear through rich ash; digging power grows from about 3 to 100+
+The arc runs from careful to plentiful (design doc v0.2): embers lie in glowing clusters, so early you read the mountain and
+dig toward the glow, and late you, your helpers and your powers tear through rich ash; digging power grows from about 3 to 100+
 m³/min. Main path about 3–3.5 h (Cold Crust ~25 min, Ember Vein ~35, Fire Mantle ~45, Blaze Shroud ~35, Starfire
 Deep ~35, Heart Hollow ~15), 4–4.5 h with 100%. Scope: 12 feathers, 25 offerings (five sets), no wet ash, no offline
 progress. One committed step each:
 - 3A. Pacing foundation: `[Pace]` lines in the game log (embers, m³ and Glow per minute, time per layer) and a tested
   pacing simulator that reads the real data assets and prints the whole run's timeline (Cinderbird → Report); then a
   20-minute real-speed playtest (Test Mode off) calibrates it. Every later step is tuned with it
-- 3B. Veins: embers placed in veins per layer (data: count, size, richness, sprinkle), glimmers hint them, Sally
-  targets vein ash, a bigger Heart Hollow
-- 3C. Heat levels 1–10 with thresholds from the simulator; tier mixes for layers 3–6; HUD for all ten levels
-- 3D. Digging scale: sieves 4–6, the weave (faster shaking), sieve capacity, baskets, the ember chute, price curves
-- 3E. The remaining powers: Heat Sight (shows veins) first, then Kiln Breath, Ember Call, Spirit Birds, Rising Sun
-- 3F. The remaining helpers: two of Sally's cousins, ash moths (carry), fire beetle (cracks glass)
-- 3G. Obstacles, never punishments: cinder glass crusts guarding veins, obsidian chunks
-- 3H. Feathers (12, placeholder memories), phoenix stages and valley thaw for every Heat level
-- 3I. The finale: the Heart Ember, rebirth, spring, credits, free play
-- 3J. Balance pass (simulator plus a full playthrough) and the minimum-spec performance run
+- 3B. Glowing ember clusters (they glow by worth through the ash, dim as they're emptied, move with sliding ash; sealed
+  layers stay dark), the crust melting away when a layer opens (its last embers fly to the nest), a full sieve of any
+  size shaking out in the same time, Sally heading for the nearest cluster, a 3 m Heart Hollow opening at 90%
+- 3C. Heat Sight (the X-Ray power, unlocked at Heat 1): shows exactly where the embers are through the ash for a few
+  seconds, with a cooldown and shop upgrades
+- 3D. Heat levels 1–10 with thresholds from the simulator; tier mixes for layers 3–6; HUD for all ten levels
+- 3E. Digging scale: sieves 4–6, the weave (faster shaking), sieve capacity, baskets, the ember chute, price curves
+- 3F. The remaining powers: Kiln Breath, Ember Call, Spirit Birds, Rising Sun
+- 3G. The remaining helpers: two of Sally's cousins, ash moths (carry), fire beetle (cracks glass)
+- 3H. Obstacles, never punishments: cinder glass crusts guarding clusters, obsidian chunks
+- 3I. Feathers (12, placeholder memories), phoenix stages and valley thaw for every Heat level
+- 3J. The finale: the Heart Ember, rebirth, spring, credits, free play
+- 3K. Balance pass (simulator plus a full playthrough) and the minimum-spec performance run
 
 **Still out of scope:** real offering and feather content, real models, audio beyond placeholders, the demo build.
 
@@ -75,6 +78,7 @@ Assets/
     Models/
     Textures/
     Audio/
+    Shaders/           hand-written shaders (the cluster glow overlay)
     Settings/          input actions and other project-level config assets
     Editor/            editor-only tooling (menus Cinderbird → Setup → … and Cinderbird → Report → …), namespace Cinderbird.EditorTools
     Tests/
@@ -121,6 +125,19 @@ Assemblies: runtime code compiles into `Cinderbird` (`Scripts/Cinderbird.asmdef`
   Neighboring chunks share their border samples (writes update every copy) so meshes are seamless; only the
   world's outer border is forced to air.
 - Dig = subtract a sphere/capsule from the density field; return the **removed ash volume**.
+- **Embers lie in glowing clusters:** each layer buries a number of clusters (`EmberClusterLayout`; data per layer in
+  `LayerDefinition`: ember count, share in clusters, embers per cluster, cluster radius) and sprinkles the rest evenly.
+  Cold Crust and Ember Vein: small rich clusters in barren ash; deeper layers: rich throughout with fewer, bigger
+  clusters. Each ember carries its cluster id (saved in the terrain snapshot, format 2). `EmberClusters` keeps every
+  cluster's count, worth, center and spread from the embers still buried in it (per-chunk partial sums, recounted only
+  for changed chunks), so a cluster dims as it's emptied and moves when its embers slide. `EmberClusterGlow` measures
+  each open-layer cluster's depth under the surface and hands each chunk its brightest 8 to an additive overlay shader
+  (`Shaders/ClusterGlow.shader`): brightness follows worth, the glowing patch is small when deep and widens as you dig
+  near. Sealed layers' clusters stay dark. Sally heads for the nearest glowing cluster. `MountainBuilder` builds the
+  mountain for the game and the pacing report alike.
+- **The crust melts:** when a layer opens (`VoxelTerrain.UnlockNextLayer`), every bit of ash of the layers above it
+  melts away (`AshTerrain.MeltLayersAbove`, re-meshed over the next frames); their last embers fly to the nest
+  (`CrustMelt`) and offerings in them drop to the new surface. The player never digs barren ash to reach a layer.
 - Embers are **data points stored per chunk** (position + tier). Embers inside the removed volume move
   into the sieve's contents. Embers are not GameObjects until they are shown in the sieve or basket.
 - Marching cubes produces the mesh; collider updated for touched chunks. Colliders bake in the background from their own

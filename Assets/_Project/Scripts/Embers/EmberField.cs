@@ -66,6 +66,28 @@ namespace Cinderbird.Embers
             }
         }
 
+        /// <summary>Moves every ember of a layer above <paramref name="layer"/> (index lower) into <paramref name="output"/>.</summary>
+        /// <returns>How many embers were extracted.</returns>
+        public int ExtractLayersAbove(int layer, List<Ember> output)
+        {
+            int extracted = 0;
+            for (int i = _embers.Count - 1; i >= 0; i--)
+            {
+                if (_embers[i].Layer >= layer)
+                {
+                    continue;
+                }
+
+                output.Add(_embers[i]);
+                int last = _embers.Count - 1;
+                _embers[i] = _embers[last];
+                _embers.RemoveAt(last);
+                extracted++;
+            }
+
+            return extracted;
+        }
+
         /// <summary>
         /// Moves every ember within the sphere into <paramref name="output"/> (appended, not cleared).
         /// </summary>

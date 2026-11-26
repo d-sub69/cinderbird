@@ -19,8 +19,8 @@ namespace Cinderbird.Pacing
             text.AppendLine();
 
             text.AppendLine("## The mountain").AppendLine();
-            text.AppendLine("| Layer | Ash m³ | Embers | Embers/m³ | Glow | Heat | Opens at |");
-            text.AppendLine("|---|---|---|---|---|---|---|");
+            text.AppendLine("| Layer | Ash m³ | InCluster share | Embers | In clusters | Embers/m³ in clusters | Glow | Heat | Opens at |");
+            text.AppendLine("|---|---|---|---|---|---|---|---|---|");
             for (int layer = 0; layer < model.Layers.Count; layer++)
             {
                 PaceLayer data = model.Layers[layer];
@@ -33,9 +33,10 @@ namespace Cinderbird.Pacing
                 }
 
                 string rule = layer == 0 ? "start" : $"{data.ClearedShare:P0} above + Heat {data.HeatLevel}";
-                float density = data.Volume > 0f ? data.TotalEmbers / data.Volume : 0f;
-                text.AppendLine(string.Format(c, "| {0} | {1:N0} | {2:N0} | {3:0.00} | {4:N0} | {5:N0} | {6} |",
-                    data.Name, data.Volume, data.TotalEmbers, density, glow, heat, rule));
+                float clusterShare = data.Volume > 0f ? data.ClusterVolume / data.Volume : 0f;
+                float clusterDensity = data.ClusterVolume > 0f ? data.TotalClusterEmbers / data.ClusterVolume : 0f;
+                text.AppendLine(string.Format(c, "| {0} | {1:N0} | {2:P0} | {3:N0} | {4:N0} | {5:0.0} | {6:N0} | {7:N0} | {8} |",
+                    data.Name, data.Volume, clusterShare, data.TotalEmbers, data.TotalClusterEmbers, clusterDensity, glow, heat, rule));
             }
 
             text.AppendLine().AppendLine("## Time per layer").AppendLine();

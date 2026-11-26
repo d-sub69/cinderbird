@@ -214,7 +214,10 @@ namespace Cinderbird.Offerings
 
             FillComplete();
             OfferingSet[] sets = _catalog.Sets;
-            _wasComplete ??= new bool[sets.Length];
+            if (_wasComplete == null || _wasComplete.Length != sets.Length)
+            {
+                _wasComplete = new bool[sets.Length];
+            }
             int justCompleted = -1;
             for (int i = 0; i < sets.Length; i++)
             {

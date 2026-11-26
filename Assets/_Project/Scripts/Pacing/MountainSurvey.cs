@@ -14,15 +14,51 @@ namespace Cinderbird.Pacing
     public static class MountainSurvey
     {
         /// <summary>Cubic meters of ash in each layer (every layer counted, locked or not).</summary>
-        public static float[] LayerVolumes(AshTerrain terrain, float pileRadius, float pileHeight)
+        public static float[] LayerVolumes(AshTerrain terrain, AshPileShape shape)
         {
-            LayerLocks all = new LayerLocks(terrain.Locks.Count);
-            all.UnlockThrough(all.Count - 1);
-            float[] volumes = new float[all.Count];
-            Vector3 center = new Vector3(0f, pileHeight * 0.5f, 0f);
-            float radius = Mathf.Sqrt(pileRadius * pileRadius + pileHeight * pileHeight * 0.25f) + 2f;
-            SphereDigBrush.Measure(terrain.World, center, radius, all, volumes);
+            return MountainBuilder.MeasureLayerVolumes(terrain, shape);
+        }
+
+        /// <summary>Cubic meters of each layer inside its clusters' spheres (what has to be dug to empty them).</summary>
+        public static float[] ClusterVolumes(IReadOnlyList<EmberCluster> clusters, float[] layerVolumes)
+        {
+            float[] volumes = new float[layerVolumes.Length];
+            foreach (EmberCluster cluster in clusters)
+            {
+                if (cluster.Layer < volumes.Length)
+                {
+                    volumes[cluster.Layer] += 4f / 3f * Mathf.PI * cluster.Radius * cluster.Radius * cluster.Radius;
+                }
+            }
+
+            for (int layer = 0; layer < volumes.Length; layer++)
+            {
+                volumes[layer] = Mathf.Min(volumes[layer], layerVolumes[layer]);
+            }
+
             return volumes;
+        }
+
+        /// <summary>Embers buried in each layer's clusters, per tier: [layer][tier].</summary>
+        public static int[][] ClusterEmbersByLayer(AshTerrain terrain, int layerCount, int tierCount)
+        {
+            int[][] counts = new int[layerCount][];
+            for (int layer = 0; layer < layerCount; layer++)
+            {
+                counts[layer] = new int[tierCount];
+            }
+
+            List<Ember> embers = new List<Ember>(terrain.BuriedEmberCount);
+            terrain.CopyAllEmbers(embers);
+            foreach (Ember ember in embers)
+            {
+                if (ember.Cluster != 0 && ember.Layer < layerCount && ember.TierIndex >= 0 && ember.TierIndex < tierCount)
+                {
+                    counts[ember.Layer][ember.TierIndex]++;
+                }
+            }
+
+            return counts;
         }
 
         /// <summary>Embers buried in each layer, per tier: [layer][tier].</summary>

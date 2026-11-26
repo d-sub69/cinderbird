@@ -196,6 +196,12 @@ namespace Cinderbird.Terrain
             UpdateColliders();
         }
 
+        /// <summary>The object showing a chunk (its mesh, on the terrain's transform).</summary>
+        public VoxelChunkView ViewOf(int chunk)
+        {
+            return _views[chunk];
+        }
+
         public void Dispose()
         {
             if (_bakePending)

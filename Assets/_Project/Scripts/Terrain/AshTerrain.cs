@@ -162,15 +162,21 @@ namespace Cinderbird.Terrain
             Array.Clear(_embersChanged, 0, _embersChanged.Length);
         }
 
-        /// <summary>Scatters embers chunk by chunk using each ash layer's own rate and tiers.</summary>
+        /// <summary>Scatters embers chunk by chunk, evenly through each ash layer at its own rate and with its tiers.</summary>
         public void SpawnLayeredEmbers(LayerSpawnTable table, int seed, float minDensity)
         {
-            List<Ember> spawned = new List<Ember>();
+            // Chunks in parallel: each has its own seed and its own ember list and only reads the ash, so the result is
+            // the same as one after another, just sooner (tens of thousands of embers at start-up).
+            List<Ember>[] spawned = new List<Ember>[_embers.Length];
+            System.Threading.Tasks.Parallel.For(0, _embers.Length, i =>
+            {
+                spawned[i] = new List<Ember>();
+                EmberSpawner.SpawnLayered(World.GetChunk(i), table, seed * ChunkSeedStride + i, minDensity, spawned[i]);
+            });
+
             for (int i = 0; i < _embers.Length; i++)
             {
-                spawned.Clear();
-                EmberSpawner.SpawnLayered(World.GetChunk(i), table, seed * ChunkSeedStride + i, minDensity, spawned);
-                _embers[i].AddRange(spawned);
+                _embers[i].AddRange(spawned[i]);
             }
 
             RecountBuried();
@@ -590,6 +596,83 @@ namespace Cinderbird.Terrain
         }
 
         /// <summary>Collects a loose ember (e.g. into the sieve): it no longer counts as in the pile.</summary>
+        /// <summary>
+        /// The crust melts when a deeper layer opens: every bit of ash of the layers above <paramref name="layer"/> is gone,
+        /// their buried and loose embers come out (counted as taken), and offerings that lay in them drop to the new surface.
+        /// </summary>
+        /// <param name="released">Receives the embers that came out (appended).</param>
+        /// <param name="uncovered">Receives the offerings uncovered, at the spot they dropped to (appended).</param>
+        public void MeltLayersAbove(int layer, List<Ember> released, List<BuriedFind> uncovered)
+        {
+            for (int z = 1; z < World.SamplesZ - 1; z++)
+            {
+                for (int y = 1; y < World.SamplesY - 1; y++)
+                {
+                    for (int x = 1; x < World.SamplesX - 1; x++)
+                    {
+                        if (World.GetDensity(x, y, z) > VoxelGrid.Air && World.GetLayer(x, y, z) < layer)
+                        {
+                            World.SetDensity(x, y, z, VoxelGrid.Air);
+                        }
+                    }
+                }
+            }
+
+            for (int chunk = 0; chunk < _embers.Length; chunk++)
+            {
+                int first = released.Count;
+                if (_embers[chunk].ExtractLayersAbove(layer, released) == 0)
+                {
+                    continue;
+                }
+
+                for (int i = first; i < released.Count; i++)
+                {
+                    _counts.Taken(released[i]);
+                }
+
+                _embersChanged[chunk] = true;
+                _emberVersions[chunk]++;
+            }
+
+            for (int i = _loose.Count - 1; i >= 0; i--)
+            {
+                if (_loose[i].Ember.Layer < layer)
+                {
+                    released.Add(TakeLoose(i));
+                }
+            }
+
+            for (int i = _finds.Count - 1; i >= 0; i--)
+            {
+                BuriedFind find = _finds[i];
+                if (find.Layer >= layer)
+                {
+                    continue;
+                }
+
+                _finds.RemoveAt(i);
+                uncovered.Add(new BuriedFind(find.Id, DropToSurface(find.Position), find.Layer));
+            }
+
+            TotalAshVolume = World.TotalAshVolume();
+        }
+
+        // Straight down from a spot to the first ash (or the ground), so a find doesn't hang in the air.
+        private Vector3 DropToSurface(Vector3 position)
+        {
+            float step = World.CellSize * 0.5f;
+            float floor = World.Origin.y + World.CellSize;
+            Vector3 point = position;
+            while (point.y > floor && World.SampleDensity(point) <= 0f)
+            {
+                point.y -= step;
+            }
+
+            point.y = Mathf.Max(point.y + step, floor);
+            return point;
+        }
+
         public Ember TakeLoose(int index)
         {
             Ember ember = _loose[index].Ember;

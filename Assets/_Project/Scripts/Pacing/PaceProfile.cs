@@ -36,6 +36,10 @@ namespace Cinderbird.Pacing
         [SerializeField, Range(0f, 1f)] private float _slippedPickedUp = 0.5f;
         [Tooltip("Embers found per cubic meter dug against the layer's average: aiming at glimmers finds more (1 = digging blind).")]
         [SerializeField, Range(1f, 10f)] private float _findBonus = 2f;
+        [Tooltip("Share of the player's digging that lands in cluster ash while the layer still has clusters (0..1).")]
+        [SerializeField, Range(0f, 1f)] private float _clusterAim = 0.4f;
+        [Tooltip("The same for the helper.")]
+        [SerializeField, Range(0f, 1f)] private float _helperClusterAim = 0.5f;
 
         [Header("Simulation")]
         [Tooltip("The simulation gives up after this many hours.")]
@@ -44,7 +48,8 @@ namespace Cinderbird.Pacing
         public PaceBehavior ToBehavior()
         {
             return new PaceBehavior(_scoopOverheadSeconds, _shakeEnergy, _activeShare, _tripSeconds, _shopSeconds, _windUse,
-                _windCoverage, _helperTripSeconds, _outerShare, _slippedPickedUp, _maxHours, _findBonus);
+                _windCoverage, _helperTripSeconds, _outerShare, _slippedPickedUp, _maxHours, _findBonus,
+                _clusterAim, _helperClusterAim);
         }
     }
 }

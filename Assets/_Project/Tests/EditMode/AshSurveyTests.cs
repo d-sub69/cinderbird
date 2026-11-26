@@ -53,6 +53,21 @@ namespace Cinderbird.Tests.EditMode
         }
 
         [Test]
+        public void ClosestTo_ACluster_IsAboveIt_NotDownhillOfIt()
+        {
+            VoxelWorld world = CreateWorld();
+            // A slope: low ash at the foot (x 1–2 m), a 2 m bank behind it; a cluster inside the bank at x = 3.5 m.
+            Fill(world, 4, 4, 8, 20, 0.5f);
+            Fill(world, 9, 4, 20, 20, 2f);
+            AshSurvey survey = new AshSurvey(0.5f, 0.15f, 1.5f);
+            Vector3 cluster = new Vector3(3.5f, 1.4f, 3f);
+
+            Assert.That(survey.TryFindClosestTo(world, new LayerLocks(1), cluster, 2f, 0, null, out Vector3 spot, out _), Is.True);
+            Assert.That(spot.y, Is.GreaterThan(1.5f), "on the bank over the cluster, not at the low foot beside it");
+            Assert.That(Vector2.Distance(new Vector2(spot.x, spot.z), new Vector2(cluster.x, cluster.z)), Is.LessThan(1f));
+        }
+
+        [Test]
         public void AmongTheNearOnes_TheLowestFirst()
         {
             VoxelWorld world = CreateWorld();

@@ -37,6 +37,11 @@ namespace Cinderbird.Terrain
         private AshSettling _settling;
         // Reused per dig: what each dig grazed waits in one of these until its hole is open.
         private readonly Stack<DigExposure> _exposures = new Stack<DigExposure>();
+        private readonly List<Ember> _melted = new List<Ember>();
+        private readonly List<BuriedFind> _meltedFinds = new List<BuriedFind>();
+        // Clusters are counted again at most this often; a dig changes one or two chunks, so each count is small.
+        private const float ClusterRefreshSeconds = 0.25f;
+        private float _nextClusterRefresh;
 
         /// <summary>Fired once <see cref="Build"/> has generated and meshed the mountain.</summary>
         public event Action Built;
@@ -62,6 +67,12 @@ namespace Cinderbird.Terrain
         /// <summary>Fired when a layer opens for digging (the layer index).</summary>
         public event Action<int> LayerUnlocked;
 
+        /// <summary>
+        /// Fired as a layer opens and the crust above it melts away, with the layer and the embers that came out of the
+        /// melted ash (valid during the call); the nest takes them. <see cref="LayerUnlocked"/> follows.
+        /// </summary>
+        public event Action<int, IReadOnlyList<Ember>> CrustMelted;
+
         /// <summary>Fired after saved terrain data was applied and re-meshed; totals may have changed.</summary>
         public event Action Restored;
 
@@ -85,6 +96,12 @@ namespace Cinderbird.Terrain
 
         /// <summary>The terrain data; null until <see cref="Build"/> has run.</summary>
         public AshTerrain Terrain => _terrain;
+
+        /// <summary>The object showing a chunk; null until built.</summary>
+        public VoxelChunkView ChunkView(int chunk) => _meshes?.ViewOf(chunk);
+
+        /// <summary>The glowing ember clusters as they stand now; null until built.</summary>
+        public EmberClusters Clusters { get; private set; }
 
         public bool IsBuilt => _terrain != null;
 
@@ -158,8 +175,10 @@ namespace Cinderbird.Terrain
                 Debug.LogWarning($"{nameof(VoxelTerrain)} on '{name}' has no ember settings; the mountain will be empty.", this);
             }
 
-            _terrain = MountainBuilder.Build(_settings, _layerCatalog, _emberSpawnSettings, _tierCatalog);
+            _terrain = MountainBuilder.Build(_settings, _layerCatalog, _emberSpawnSettings, _tierCatalog, out IReadOnlyList<EmberCluster> layout);
             VoxelWorld world = _terrain.World;
+            Clusters = new EmberClusters(layout, world.ChunkCount, ClusterWeights());
+            Clusters.Refresh(_terrain);
             Fingerprint = TerrainFingerprint.Build(_settings, _layerCatalog);
             if (_layerCatalog != null)
             {
@@ -171,9 +190,27 @@ namespace Cinderbird.Terrain
             Built?.Invoke();
         }
 
+        // A cluster's glow follows what its embers are worth: a few Starfire embers outshine many Sparks.
+        private float[] ClusterWeights()
+        {
+            int count = _tierCatalog != null ? _tierCatalog.Count : 0;
+            float[] weights = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                weights[i] = _tierCatalog[i] != null ? _tierCatalog[i].GlowValue : 0f;
+            }
+
+            return weights;
+        }
+
         private void Update()
         {
             _meshes?.Update();
+            if (Clusters != null && Time.unscaledTime >= _nextClusterRefresh)
+            {
+                _nextClusterRefresh = Time.unscaledTime + ClusterRefreshSeconds;
+                Clusters.Refresh(_terrain);
+            }
         }
 
         private void OnDestroy()
@@ -383,12 +420,37 @@ namespace Cinderbird.Terrain
         public int UnlockNextLayer()
         {
             int layer = _terrain != null ? _terrain.Locks.UnlockNext() : -1;
-            if (layer >= 0)
+            if (layer < 0)
             {
-                LayerUnlocked?.Invoke(layer);
+                return layer;
             }
 
+            MeltCrustAbove(layer);
+            LayerUnlocked?.Invoke(layer);
             return layer;
+        }
+
+        // The nest's heat melts what is left of the layers above the one that opened: no barren ash stands between the
+        // player and the new layer, and the mountain visibly sinks. Their last embers come out for the nest (CrustMelted).
+        // The re-meshing is spread over the next frames, as for sliding ash, so it reads as the crust crumbling away.
+        private void MeltCrustAbove(int layer)
+        {
+            if (_settling != null)
+            {
+                _settling.WriteOutNow();
+            }
+
+            _melted.Clear();
+            _meltedFinds.Clear();
+            _terrain.MeltLayersAbove(layer, _melted, _meltedFinds);
+            _meshes.ScheduleDirtyChunks();
+            CrustMelted?.Invoke(layer, _melted);
+            if (_meltedFinds.Count > 0)
+            {
+                FindsUncovered?.Invoke(_meltedFinds);
+            }
+
+            LooseEmbersChanged?.Invoke();
         }
 
         /// <summary>

@@ -22,6 +22,10 @@ namespace Cinderbird.Terrain
         [Tooltip("Tier of the single ember at the pocket's center (index in the tier catalog).")]
         [SerializeField, Min(0)] private int _heartTierIndex = 5;
 
+        [Header("Ember clusters")]
+        [Tooltip("Seed for where the clusters lie; change it for a different mountain with the same numbers.")]
+        [SerializeField] private int _clusterSeed = 7;
+
         public int Count => _layers.Count;
 
         public LayerDefinition this[int index] => _layers[index];
@@ -46,19 +50,24 @@ namespace Cinderbird.Terrain
             return new LayerLayout(bandStarts, PocketCenter, pocketRadius);
         }
 
-        public LayerSpawnTable CreateSpawnTable(int tierCount)
+        public int ClusterSeed => _clusterSeed;
+
+        /// <summary>Per layer: how many clusters of what size, and how many embers sprinkled on their own.</summary>
+        public ClusterPlan[] CreateClusterPlans(int tierCount)
         {
-            float[] rates = new float[_layers.Count];
-            float[][] weights = new float[_layers.Count][];
-            for (int i = 0; i < _layers.Count; i++)
+            ClusterPlan[] plans = new ClusterPlan[_layers.Count];
+            for (int i = 0; i < plans.Length; i++)
             {
                 LayerDefinition layer = _layers[i];
-                rates[i] = layer != null ? layer.EmbersPerCubicMeter : 0f;
-                weights[i] = layer != null ? layer.TierWeights(tierCount) : new float[tierCount];
+                plans[i] = layer != null
+                    ? ClusterPlan.FromCount(layer.EmberCount, layer.ClusterShare, layer.EmbersPerCluster, layer.ClusterRadius,
+                        layer.TierWeights(tierCount))
+                    : new ClusterPlan(0, 1, 0.5f, 0, new float[tierCount]);
             }
 
-            return new LayerSpawnTable(rates, weights);
+            return plans;
         }
+
 
         public Color[] CreateTints()
         {

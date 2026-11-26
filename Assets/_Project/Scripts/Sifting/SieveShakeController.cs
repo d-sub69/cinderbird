@@ -26,6 +26,7 @@ namespace Cinderbird.Sifting
         private bool _drivenHeld;
         private float _drivenWiggleSpeed;
         private float _timeScale = 1f;
+        private float _rateScale = 1f;
 
         /// <summary>Fired with the cubic meters of ash shaken out this frame.</summary>
         public event Action<float> AshShakenOut;
@@ -73,6 +74,12 @@ namespace Cinderbird.Sifting
             _drivenWiggleSpeed = held ? Mathf.Max(0f, wiggleSpeed) : 0f;
         }
 
+        /// <summary>Shakes ash out this many times faster: a bigger sieve, so a full one takes as long as the first sieve's.</summary>
+        public void SetRateScale(float scale)
+        {
+            _rateScale = Mathf.Max(0.01f, scale);
+        }
+
         /// <summary>Runs the shake faster (above 1) or slower: a helper's pace upgrade shortens her shaking.</summary>
         public void SetTimeScale(float scale)
         {
@@ -108,7 +115,7 @@ namespace Cinderbird.Sifting
 
         private void ShakeOutAsh(float deltaTime)
         {
-            float toRemove = _shaker.AshToRemove(deltaTime);
+            float toRemove = _shaker.AshToRemove(deltaTime) * _rateScale;
             if (toRemove <= 0f)
             {
                 return;

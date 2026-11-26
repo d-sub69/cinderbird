@@ -68,6 +68,8 @@ namespace Cinderbird.UI
         [SerializeField] private ValleyThaw _valley;
         [Tooltip("Optional: confirms the performance scenario key (F7).")]
         [SerializeField] private PerfScenarioKey _perfScenario;
+        [Tooltip("Optional: tells when the crust melts away and what it gave the nest.")]
+        [SerializeField] private CrustMelt _crustMelt;
 
         private readonly StringBuilder _builder = new StringBuilder();
         private int[] _tierCounts;
@@ -175,6 +177,11 @@ namespace Cinderbird.UI
             {
                 _perfScenario.Notice += ShowMessage;
             }
+
+            if (_crustMelt != null)
+            {
+                _crustMelt.Notice += ShowStoryMoment;
+            }
         }
 
         private void OnDisable()
@@ -259,6 +266,11 @@ namespace Cinderbird.UI
             if (_perfScenario != null)
             {
                 _perfScenario.Notice -= ShowMessage;
+            }
+
+            if (_crustMelt != null)
+            {
+                _crustMelt.Notice -= ShowStoryMoment;
             }
         }
 

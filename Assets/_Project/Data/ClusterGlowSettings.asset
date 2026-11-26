@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1b032083aa43eb54dbd8ca4ffbd78b00, type: 3}
+  m_Name: ClusterGlowSettings
+  m_EditorClassIdentifier: Cinderbird::Cinderbird.Embers.ClusterGlowSettings
+  _reach: 2.5
+  _intensityPerWorth: 0.35
+  _worthExponent: 0.5
+  _maxIntensity: 6
+  _deepPatchScale: 0.3
+  _minPatchRadius: 0.3
+  _pulse: 0.15
+  _refreshSeconds: 0.25

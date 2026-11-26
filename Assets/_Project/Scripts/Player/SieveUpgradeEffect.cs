@@ -17,6 +17,8 @@ namespace Cinderbird.Player
         [SerializeField] private ScoopInteractor _scoop;
         [SerializeField] private SieveView _view;
         [SerializeField] private SieveSettings _settings;
+        [Tooltip("Optional: a bigger sieve shakes out faster, so a full sieve of any size takes the same time.")]
+        [SerializeField] private SieveShakeController _shake;
 
         private void Awake()
         {
@@ -55,6 +57,11 @@ namespace Cinderbird.Player
             SieveTier tier = _upgrade.TierAt(_upgrades.LevelOf(_upgrade));
             _scoop.SetScoopRadius(tier.ScoopRadius);
             _sieve.SetCapacity(tier.EmberCapacity);
+            if (_shake != null)
+            {
+                _shake.SetRateScale(SieveShakeScale.For(_upgrade.TierAt(0).ScoopRadius, tier.ScoopRadius));
+            }
+
             // Room to show a full sieve, and a little over: a scoop can bring more than the capacity.
             _view.SetSize(tier.VisualScale, Mathf.Max(tier.EmberCapacity, _settings.MaxVisibleEmbers));
         }

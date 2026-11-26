@@ -38,7 +38,7 @@ namespace Cinderbird.Embers
 
         public LooseEmber MovedTo(Vector3 position)
         {
-            return new LooseEmber(Id, new Ember(position, Ember.TierIndex, Ember.Layer), CameFrom, Rest);
+            return new LooseEmber(Id, Ember.MovedTo(position), CameFrom, Rest);
         }
 
         public LooseEmber WithRest(float rest)

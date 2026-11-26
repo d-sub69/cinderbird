@@ -16,7 +16,10 @@ MonoBehaviour:
   _tint: {r: 0.72, g: 0.66, b: 0.55, a: 1}
   _dustColor: {r: 0.818, g: 0.77900004, b: 0.7075, a: 0.8}
   _startDepth: 6
-  _embersPerCubicMeter: 3
+  _emberCount: 20000
+  _clusterShare: 0.35
+  _embersPerCluster: 200
+  _clusterRadius: 1.4
   _tierWeights:
   - 25
   - 30

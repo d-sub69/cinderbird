@@ -5,18 +5,22 @@ namespace Cinderbird.Pacing
 {
     /// <summary>
     /// Plays a whole run of the economy in one-second steps: the player, the helper and the wind dig ash from the deepest
-    /// open layer (a little from the leftovers of outer ones), embers come out in proportion to the ash dug, are carried
-    /// to the nest (trips cost time) and pay Glow and Heat; Heat levels and the layer rule open new layers; Glow buys the
-    /// cheapest upgrade on offer as soon as it is affordable. Deterministic: the same model always gives the same run.
+    /// open layer (a little from the leftovers of outer ones); each layer is cluster ash and the ash between clusters, and the
+    /// player and helper aim a share of their digging at the clusters while any are left. Embers come out in proportion to
+    /// the ash dug (between clusters, aiming at glimmers finds more), are carried to the nest (trips cost time) and pay Glow
+    /// and Heat; Heat levels and the layer rule open new layers; Glow buys the cheapest upgrade on offer as soon as it is
+    /// affordable. Deterministic: the same model always gives the same run.
     /// </summary>
     public sealed class PaceSimulator
     {
         private const double Step = 1.0;
         private const double SampleInterval = 300.0;
-        // No ash moved for this long, with nothing left to buy that helps, means the run is stuck.
+        // No ash moved for this long, with nothing bought, means the run is stuck.
         private const double StallSeconds = 900.0;
         private const float ShareTolerance = 1e-4f;
         private const float VolumeEpsilon = 1e-6f;
+        private const int InCluster = 0;
+        private const int Between = 1;
 
         // What the game starts with when a line is missing from the model.
         private const float DefaultScoopVolume = 0.16f;
@@ -29,8 +33,8 @@ namespace Cinderbird.Pacing
         private readonly PaceBehavior _behavior;
         private readonly int _layerCount;
         private readonly int _tierCount;
-        private readonly float[] _volumeLeft;
-        private readonly double[][] _embersLeft;
+        private readonly double[][] _volumeLeft;
+        private readonly double[][][] _embersLeft;
         private readonly double[] _initialEmbers;
         private readonly bool[] _open;
         private readonly int[] _levels;
@@ -55,19 +59,21 @@ namespace Cinderbird.Pacing
             _behavior = model.Behavior;
             _layerCount = model.Layers.Count;
             _tierCount = Math.Max(model.GlowByTier.Count, model.HeatByTier.Count);
-            _volumeLeft = new float[_layerCount];
-            _embersLeft = new double[_layerCount][];
+            _volumeLeft = new double[_layerCount][];
+            _embersLeft = new double[_layerCount][][];
             _initialEmbers = new double[_layerCount];
             _open = new bool[_layerCount];
             _found = new double[_tierCount];
             for (int layer = 0; layer < _layerCount; layer++)
             {
                 PaceLayer data = model.Layers[layer];
-                _volumeLeft[layer] = data.Volume;
-                _embersLeft[layer] = new double[_tierCount];
+                _volumeLeft[layer] = new double[] { data.ClusterVolume, data.Volume - data.ClusterVolume };
+                _embersLeft[layer] = new[] { new double[_tierCount], new double[_tierCount] };
                 for (int tier = 0; tier < _tierCount; tier++)
                 {
-                    _embersLeft[layer][tier] = data.EmbersOf(tier);
+                    int inClusters = data.ClusterVolume > 0f ? data.ClusterEmbersOf(tier) : 0;
+                    _embersLeft[layer][InCluster][tier] = inClusters;
+                    _embersLeft[layer][Between][tier] = data.EmbersOf(tier) - inClusters;
                     _initialEmbers[layer] += data.EmbersOf(tier);
                 }
             }
@@ -142,18 +148,22 @@ namespace Cinderbird.Pacing
                 return 0.0;
             }
 
-            double density = DensityOf(target);
-            double sifted = PlayerDig(density) + HelperDig(density);
-            double blown = WindDig();
-            double total = sifted + blown;
+            double playerAim = AimAt(target, _behavior.ClusterAim);
+            double helperAim = AimAt(target, _behavior.HelperClusterAim);
+            double player = PlayerDig(DensityFor(target, playerAim));
+            double helper = HelperDig(DensityFor(target, helperAim));
+            double wind = WindDig();
+            double total = player + helper + wind;
             if (total <= 0.0)
             {
                 return 0.0;
             }
 
+            // The wind strips whatever lies on top: clusters only as often as they make up the layer.
+            double aim = (player * playerAim + helper * helperAim + wind * ClusterShareLeft(target)) / total;
             Array.Clear(_found, 0, _found.Length);
-            Remove(target, total);
-            ReturnSlippedSparks(target, total > 0.0 ? sifted / total : 0.0);
+            Remove(target, total, aim);
+            ReturnSlippedSparks(target, (player + helper) / total);
             Earn();
             _sampleAsh += total;
             return total;
@@ -168,7 +178,9 @@ namespace Cinderbird.Pacing
             }
 
             double scoop = ValueOr(PaceEffect.Sieve, DefaultScoopVolume);
-            double shake = scoop * 1000.0 / (_model.ShakeLitersPerSecond * Math.Max(0.05, _behavior.ShakeEnergy));
+            // A bigger sieve shakes out faster: a full sieve of any size takes the same time.
+            double shakeScale = Math.Max(0.05, ScaleOr(PaceEffect.Sieve, 1f));
+            double shake = scoop * 1000.0 / (_model.ShakeLitersPerSecond * shakeScale * Math.Max(0.05, _behavior.ShakeEnergy));
             double carry = Math.Max(1.0, ValueOr(PaceEffect.Basket, DefaultBasket));
             double trips = scoop * density * _behavior.TripSeconds / carry;
             double secondsPerScoop = Math.Max(0.1, _behavior.ScoopOverheadSeconds + shake + trips);
@@ -208,46 +220,105 @@ namespace Cinderbird.Pacing
             return Math.PI * radius * radius * _model.WindDepth * Math.Max(0.0, _behavior.WindCoverage);
         }
 
+        // The share of digging that lands in clusters: the aim while clusters are left, nothing once they're dug out.
+        private double AimAt(int layer, float aim)
+        {
+            if (_volumeLeft[layer][InCluster] <= VolumeEpsilon)
+            {
+                return 0.0;
+            }
+
+            return _volumeLeft[layer][Between] <= VolumeEpsilon ? 1.0 : Math.Max(0f, Math.Min(1f, aim));
+        }
+
+        private double ClusterShareLeft(int layer)
+        {
+            double total = _volumeLeft[layer][InCluster] + _volumeLeft[layer][Between];
+            return total > VolumeEpsilon ? _volumeLeft[layer][InCluster] / total : 0.0;
+        }
+
+        // Embers per cubic meter a digger meets, aiming that share at the clusters: what decides how often they walk to the nest.
+        private double DensityFor(int layer, double aim)
+        {
+            return aim * CompartmentDensity(layer, InCluster, 1f) +
+                   (1.0 - aim) * CompartmentDensity(layer, Between, Math.Max(1f, _behavior.FindBonus));
+        }
+
+        private double CompartmentDensity(int layer, int part, float bonus)
+        {
+            double left = _volumeLeft[layer][part];
+            if (left <= VolumeEpsilon)
+            {
+                return 0.0;
+            }
+
+            double embers = 0.0;
+            for (int tier = 0; tier < _tierCount; tier++)
+            {
+                embers += _embersLeft[layer][part][tier];
+            }
+
+            return embers / left * bonus;
+        }
+
         // Most of the ash comes from the deepest open layer; a share from the leftovers of the outer ones.
-        private void Remove(int target, double volume)
+        private void Remove(int target, double volume, double aim)
         {
             double outerLeft = 0.0;
             for (int layer = 0; layer < target; layer++)
             {
-                outerLeft += _open[layer] ? _volumeLeft[layer] : 0f;
+                outerLeft += _open[layer] ? LayerVolumeLeft(layer) : 0.0;
             }
 
             double outer = outerLeft > VolumeEpsilon ? volume * Math.Max(0f, Math.Min(1f, _behavior.OuterShare)) : 0.0;
             for (int layer = 0; layer < target && outer > 0.0; layer++)
             {
-                if (_open[layer] && _volumeLeft[layer] > VolumeEpsilon)
+                double left = LayerVolumeLeft(layer);
+                if (_open[layer] && left > VolumeEpsilon)
                 {
-                    DigLayer(layer, outer * _volumeLeft[layer] / outerLeft);
+                    DigLayer(layer, outer * left / outerLeft, AimAt(layer, _behavior.ClusterAim));
                 }
             }
 
-            DigLayer(target, volume - outer);
+            DigLayer(target, volume - outer, aim);
         }
 
-        private void DigLayer(int layer, double volume)
+        private void DigLayer(int layer, double volume, double aim)
         {
-            double left = _volumeLeft[layer];
+            double clusterLeft = _volumeLeft[layer][InCluster];
+            double betweenLeft = _volumeLeft[layer][Between];
+            double inCluster = Math.Min(clusterLeft, volume * aim);
+            double between = volume - inCluster;
+            if (between > betweenLeft)
+            {
+                // Nothing left between the clusters: the rest of the digging lands in them.
+                inCluster = Math.Min(clusterLeft, inCluster + between - betweenLeft);
+                between = betweenLeft;
+            }
+
+            Take(layer, InCluster, inCluster, 1f);
+            // Between the clusters, aiming at glimmers finds more than the average while there are easy ones left.
+            Take(layer, Between, between, Math.Max(1f, _behavior.FindBonus));
+        }
+
+        private void Take(int layer, int part, double volume, float bonus)
+        {
+            double left = _volumeLeft[layer][part];
             if (left <= VolumeEpsilon || volume <= 0.0)
             {
                 return;
             }
 
             double share = Math.Min(1.0, volume / left);
-            // Aiming finds more embers per cubic meter than the average while there are still easy ones left.
-            double emberShare = Math.Min(1.0, share * Math.Max(1f, _behavior.FindBonus));
+            double emberShare = Math.Min(1.0, share * bonus);
             for (int tier = 0; tier < _tierCount; tier++)
             {
-                double taken = _embersLeft[layer][tier] * emberShare;
-                _embersLeft[layer][tier] -= taken;
+                double taken = _embersLeft[layer][part][tier] * emberShare;
+                _embersLeft[layer][part][tier] -= taken;
                 _found[tier] += taken;
             }
 
-            _volumeLeft[layer] = share >= 1.0 ? 0f : (float)(left - volume);
+            _volumeLeft[layer][part] = share >= 1.0 ? 0.0 : left - volume;
         }
 
         // Sparks that slip through the mesh fall back onto the pile; some are picked up later, the rest stay to be dug.
@@ -259,6 +330,7 @@ namespace Cinderbird.Pacing
                 return;
             }
 
+            int part = _volumeLeft[target][Between] > VolumeEpsilon ? Between : InCluster;
             for (int tier = 0; tier < _tierCount && tier < _model.TierSlips.Count; tier++)
             {
                 if (!_model.TierSlips[tier])
@@ -268,7 +340,7 @@ namespace Cinderbird.Pacing
 
                 double back = _found[tier] * siftedShare * slip;
                 _found[tier] -= back;
-                _embersLeft[target][tier] += back;
+                _embersLeft[target][part][tier] += back;
             }
         }
 
@@ -318,13 +390,45 @@ namespace Cinderbird.Pacing
                 _open[layer] = true;
                 _run.LayerOpenedAt[layer] = time;
                 _run.Events.Add(new PaceEvent(time, $"{data.Name} opened"));
+                MeltAbove(layer, time);
+            }
+        }
+
+        // The crust above an opened layer melts away: its ash is gone and its last embers fly to the nest.
+        private void MeltAbove(int layer, double time)
+        {
+            Array.Clear(_found, 0, _found.Length);
+            for (int above = 0; above < layer; above++)
+            {
+                for (int part = InCluster; part <= Between; part++)
+                {
+                    for (int tier = 0; tier < _tierCount; tier++)
+                    {
+                        _found[tier] += _embersLeft[above][part][tier];
+                        _embersLeft[above][part][tier] = 0.0;
+                    }
+
+                    _volumeLeft[above][part] = 0.0;
+                }
+            }
+
+            double released = 0.0;
+            foreach (double count in _found)
+            {
+                released += count;
+            }
+
+            Earn();
+            if (released >= 1.0)
+            {
+                _run.Events.Add(new PaceEvent(time, $"the crust melted: {released:N0} embers flew to the nest"));
             }
         }
 
         private bool IsFinished()
         {
             int last = _layerCount - 1;
-            return last >= 0 && _open[last] && (_volumeLeft[last] <= VolumeEpsilon || ClearedShare(last) >= 1f - ShareTolerance);
+            return last >= 0 && _open[last] && (LayerVolumeLeft(last) <= VolumeEpsilon || ClearedShare(last) >= 1f - ShareTolerance);
         }
 
         private bool Shop(double time)
@@ -425,11 +529,16 @@ namespace Cinderbird.Pacing
                    $"(least cleared: {LeastClearedAbove(next):P0})";
         }
 
+        private double LayerVolumeLeft(int layer)
+        {
+            return _volumeLeft[layer][InCluster] + _volumeLeft[layer][Between];
+        }
+
         private int DeepestOpenWithAsh()
         {
             for (int layer = _layerCount - 1; layer >= 0; layer--)
             {
-                if (_open[layer] && _volumeLeft[layer] > VolumeEpsilon)
+                if (_open[layer] && LayerVolumeLeft(layer) > VolumeEpsilon)
                 {
                     return layer;
                 }
@@ -451,23 +560,6 @@ namespace Cinderbird.Pacing
             return 0;
         }
 
-        private double DensityOf(int layer)
-        {
-            double left = _volumeLeft[layer];
-            if (left <= VolumeEpsilon)
-            {
-                return 0.0;
-            }
-
-            double embers = 0.0;
-            for (int tier = 0; tier < _tierCount; tier++)
-            {
-                embers += _embersLeft[layer][tier];
-            }
-
-            return embers / left;
-        }
-
         private float ClearedShare(int layer)
         {
             if (_initialEmbers[layer] <= 0.0)
@@ -478,7 +570,7 @@ namespace Cinderbird.Pacing
             double left = 0.0;
             for (int tier = 0; tier < _tierCount; tier++)
             {
-                left += _embersLeft[layer][tier];
+                left += _embersLeft[layer][InCluster][tier] + _embersLeft[layer][Between][tier];
             }
 
             return (float)(1.0 - left / _initialEmbers[layer]);
@@ -515,6 +607,19 @@ namespace Cinderbird.Pacing
                 if (_model.Upgrades[i].Effect == effect)
                 {
                     return _model.Upgrades[i].ValueAt(_levels[i]);
+                }
+            }
+
+            return fallback;
+        }
+
+        private double ScaleOr(PaceEffect effect, float fallback)
+        {
+            for (int i = 0; i < _levels.Length; i++)
+            {
+                if (_model.Upgrades[i].Effect == effect)
+                {
+                    return _model.Upgrades[i].ScaleAt(_levels[i], fallback);
                 }
             }
 

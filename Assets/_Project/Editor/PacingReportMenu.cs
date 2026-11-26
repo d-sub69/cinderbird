@@ -77,15 +77,17 @@ namespace Cinderbird.EditorTools
                 Debug.LogWarning($"No {ProfilePath}: the pacing report uses the starting guesses. Run the 3A setup to create it.");
             }
 
-            AshTerrain terrain = MountainBuilder.Build(terrainSettings, layers, spawn, tiers);
+            AshTerrain terrain = MountainBuilder.Build(terrainSettings, layers, spawn, tiers, out IReadOnlyList<EmberCluster> clusters);
             AshPileShape shape = terrainSettings.PileShape;
-            float[] volumes = MountainSurvey.LayerVolumes(terrain, shape.Radius, shape.Height);
+            float[] volumes = MountainSurvey.LayerVolumes(terrain, shape);
+            float[] clusterVolumes = MountainSurvey.ClusterVolumes(clusters, volumes);
             int[][] embers = MountainSurvey.EmbersByLayer(terrain, layers.Count, tiers.Count);
+            int[][] clusterEmbers = MountainSurvey.ClusterEmbersByLayer(terrain, layers.Count, tiers.Count);
             List<PaceLayer> paceLayers = new List<PaceLayer>();
             for (int layer = 0; layer < layers.Count; layer++)
             {
                 paceLayers.Add(new PaceLayer(layers.NameOf(layer), volumes[layer], embers[layer], layers.UnlockHeatLevelOf(layer),
-                    layers.UnlockClearedShareOf(layer)));
+                    layers.UnlockClearedShareOf(layer), clusterVolumes[layer], clusterEmbers[layer]));
             }
 
             int[] glow = new int[tiers.Count];
@@ -140,6 +142,7 @@ namespace Cinderbird.EditorTools
 
             float[] values = new float[max + 1];
             int[] capacities = null;
+            float[] scales = null;
             PaceEffect effect = EffectOf(definition);
             for (int level = 0; level <= max; level++)
             {
@@ -149,6 +152,8 @@ namespace Cinderbird.EditorTools
                         capacities ??= new int[max + 1];
                         values[level] = scoopVolume(sieve.TierAt(level).ScoopRadius);
                         capacities[level] = sieve.TierAt(level).EmberCapacity;
+                        scales ??= new float[max + 1];
+                        scales[level] = SieveShakeScale.For(sieve.TierAt(0).ScoopRadius, sieve.TierAt(level).ScoopRadius);
                         break;
                     case BasketUpgrade basket:
                         values[level] = basket.LevelAt(level).Capacity;
@@ -163,7 +168,7 @@ namespace Cinderbird.EditorTools
             }
 
             return new PaceUpgrade(definition.Id, definition.DisplayName, effect, prices, values, capacities, definition.RequiresId,
-                definition.RequiredHeatLevel);
+                definition.RequiredHeatLevel, scales);
         }
 
         private static PaceEffect EffectOf(UpgradeDefinition definition)

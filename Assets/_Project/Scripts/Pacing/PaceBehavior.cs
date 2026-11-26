@@ -8,8 +8,10 @@ namespace Cinderbird.Pacing
     {
         public PaceBehavior(float scoopOverheadSeconds, float shakeEnergy, float activeShare, float tripSeconds,
             float shopSeconds, float windUse, float windCoverage, float helperTripSeconds, float outerShare,
-            float slippedPickedUp, float maxHours, float findBonus = 1f)
+            float slippedPickedUp, float maxHours, float findBonus = 1f, float clusterAim = 0.4f, float helperClusterAim = 0.5f)
         {
+            ClusterAim = clusterAim;
+            HelperClusterAim = helperClusterAim;
             ScoopOverheadSeconds = scoopOverheadSeconds;
             ShakeEnergy = shakeEnergy;
             ActiveShare = activeShare;
@@ -63,9 +65,16 @@ namespace Cinderbird.Pacing
         /// </summary>
         public float FindBonus { get; }
 
+        /// <summary>Share of the player's digging that lands in cluster ash while the layer still has clusters left (0..1).</summary>
+        public float ClusterAim { get; }
+
+        /// <summary>The same for the helper, who looks for cluster ash near her.</summary>
+        public float HelperClusterAim { get; }
+
         /// <summary>
         /// Calibrated on Art's first real-speed playtest (20 min, hand sieve, Cold Crust): a scoop every 3.0 s while
-        /// sifting almost nonstop, and twice the layer's embers per cubic meter from aiming at glimmers.
+        /// sifting almost nonstop, twice the layer's embers per cubic meter from aiming at glimmers; and on the cluster playtest
+        /// (Cold Crust, wooden sieve) 40% of the digging landing in clusters.
         /// </summary>
         public static PaceBehavior Default => new PaceBehavior(1.0f, 0.85f, 0.95f, 20f, 20f, 0.6f, 0.85f, 25f, 0.15f, 0.5f, 15f, 2f);
     }

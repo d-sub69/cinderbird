@@ -31,6 +31,10 @@ namespace Cinderbird.Helpers
         private const float SpotHeightReach = 1.5f;
         // Less ash than this on the whole mountain (cubic meters) counts as none: no search needed.
         private const float NoAshLeft = 0.01f;
+        // Glowing clusters this far from her (or her spot) draw her to them, in meters.
+        private const float ClusterReach = 12f;
+        // How far across from a cluster's middle she looks for a spot to dig down into it, beyond its own size (meters).
+        private const float ClusterApproach = 1.5f;
 
         private static readonly ProfilerMarker SearchMarker = new ProfilerMarker("Cinderbird.Helper");
 
@@ -644,7 +648,15 @@ namespace Cinderbird.Helpers
         private bool TryWorkIn(int layer, Vector3 from)
         {
             AshTerrain terrain = _pile.Terrain;
-            if (!_survey.TryFindNearest(terrain.World, terrain.Locks, from, layer, _unreachable, out Vector3 surface, out int key))
+            // The nearest glowing cluster near her (or her spot) first: she digs at the open spot closest to it, down into
+            // it, as the player follows a glow. Otherwise the nearest ash, from the bottom up.
+            Vector3 surface = default;
+            int key = -1;
+            bool toCluster = _pile.Clusters != null && _pile.Clusters.TryNearest(from, layer, out ClusterState cluster) &&
+                             (cluster.Center - from).sqrMagnitude <= ClusterReach * ClusterReach &&
+                             _survey.TryFindClosestTo(terrain.World, terrain.Locks, cluster.Center, cluster.Radius + ClusterApproach,
+                                 layer, _unreachable, out surface, out key);
+            if (!toCluster && !_survey.TryFindNearest(terrain.World, terrain.Locks, from, layer, _unreachable, out surface, out key))
             {
                 return false;
             }

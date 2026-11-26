@@ -20,7 +20,8 @@ namespace Cinderbird.Save
     public sealed class TerrainSnapshot
     {
         // Bump when the binary layout below changes; older data is then rejected rather than misread.
-        private const int FormatVersion = 1;
+        // 2: each buried ember also stores its cluster (format 1 still loads, its embers in no cluster).
+        private const int FormatVersion = 2;
         private const float QuantizeScale = 127f;
 
         // Per chunk index (null / false where the chunk isn't in the snapshot).
@@ -204,6 +205,7 @@ namespace Cinderbird.Save
                         writer.Write(ember.Position.z);
                         writer.Write((ushort)ember.TierIndex);
                         writer.Write(ember.Layer);
+                        writer.Write(ember.Cluster);
                     }
                 }
             }
@@ -235,7 +237,7 @@ namespace Cinderbird.Save
         private static TerrainSnapshot Read(BinaryReader reader)
         {
             int format = reader.ReadInt32();
-            if (format != FormatVersion)
+            if (format != FormatVersion && format != 1)
             {
                 throw new InvalidDataException($"Unknown terrain data format {format}.");
             }
@@ -277,7 +279,8 @@ namespace Cinderbird.Save
                     Vector3 position = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                     int tier = reader.ReadUInt16();
                     byte layer = reader.ReadByte();
-                    chunkEmbers.Add(new Ember(position, tier, layer));
+                    ushort cluster = format >= 2 ? reader.ReadUInt16() : (ushort)0;
+                    chunkEmbers.Add(new Ember(position, tier, layer, cluster));
                 }
 
                 embers[c] = chunkEmbers;

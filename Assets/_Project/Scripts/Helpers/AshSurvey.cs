@@ -133,6 +133,46 @@ namespace Cinderbird.Helpers
             return false;
         }
 
+        /// <summary>
+        /// The open spot of a layer closest to a point inside the ash (a cluster's middle), within <paramref name="radius"/>
+        /// of it across: where to dig to reach it. Not the lowest spot: on a slope that would be downhill of the point,
+        /// and digging there would never reach it.
+        /// </summary>
+        public bool TryFindClosestTo(VoxelWorld world, LayerLocks locks, Vector3 target, float radius, int layer,
+            ICollection<int> excluded, out Vector3 surface, out int columnKey)
+        {
+            RefreshChunkIndex(world);
+            surface = default;
+            columnKey = -1;
+            int steps = Mathf.CeilToInt(radius / _stride);
+            float best = float.MaxValue;
+            for (int j = -steps; j <= steps; j++)
+            {
+                for (int i = -steps; i <= steps; i++)
+                {
+                    float x = target.x + i * _stride;
+                    float z = target.z + j * _stride;
+                    if ((i * i + j * j) * _stride * _stride > radius * radius || !IsInside(world, x, z) ||
+                        !TryOpenAshIndexed(world, locks, x, z, out float top, out int key, out int topLayer) ||
+                        topLayer != layer || (excluded != null && excluded.Contains(key)))
+                    {
+                        continue;
+                    }
+
+                    Vector3 point = new Vector3(x, top, z);
+                    float distance = (point - target).sqrMagnitude;
+                    if (distance < best)
+                    {
+                        best = distance;
+                        surface = point;
+                        columnKey = key;
+                    }
+                }
+            }
+
+            return columnKey >= 0;
+        }
+
         /// <summary>Whether a layer has open ash anywhere (that isn't excluded).</summary>
         public bool HasOpenAsh(VoxelWorld world, LayerLocks locks, Vector3 from, int layer, ICollection<int> excluded)
         {

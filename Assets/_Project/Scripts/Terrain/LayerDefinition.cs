@@ -15,7 +15,14 @@ namespace Cinderbird.Terrain
         [SerializeField, Min(0f)] private float _startDepth;
 
         [Header("Embers")]
-        [SerializeField, Min(0f)] private float _embersPerCubicMeter = 3f;
+        [Tooltip("Embers buried in this layer (the Heart Ember of the last layer comes on top).")]
+        [SerializeField, Min(0)] private int _emberCount = 2000;
+        [Tooltip("Share of the layer's embers that lie in glowing clusters; the rest are sprinkled thinly on their own.")]
+        [SerializeField, Range(0f, 1f)] private float _clusterShare = 0.9f;
+        [Tooltip("Embers in an average cluster (each cluster varies by about 40%).")]
+        [SerializeField, Min(1)] private int _embersPerCluster = 25;
+        [Tooltip("Radius of an average cluster, in meters (each varies by about 30%).")]
+        [SerializeField, Min(0.1f)] private float _clusterRadius = 0.9f;
         [Tooltip("Relative chance of each ember tier, in the tier catalog's order. 0 = never in this layer.")]
         [SerializeField] private float[] _tierWeights = { 100f };
 
@@ -29,7 +36,10 @@ namespace Cinderbird.Terrain
         public Color Tint => _tint;
         public Color DustColor => _dustColor;
         public float StartDepth => _startDepth;
-        public float EmbersPerCubicMeter => _embersPerCubicMeter;
+        public int EmberCount => _emberCount;
+        public float ClusterShare => _clusterShare;
+        public int EmbersPerCluster => _embersPerCluster;
+        public float ClusterRadius => _clusterRadius;
         public int UnlockHeatLevel => _unlockHeatLevel;
         public float UnlockClearedShare => _unlockClearedShare;
 

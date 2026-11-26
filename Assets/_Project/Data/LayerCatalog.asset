@@ -19,6 +19,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f60ae816e9aff1b4da976af9de3be004, type: 2}
   - {fileID: 11400000, guid: 7f4ac1c8fc9f2b349ab1b8224aadbe1e, type: 2}
   - {fileID: 11400000, guid: 3aba0ad6e5e38794bb012ec37df82694, type: 2}
-  _pocketHeight: 1.5
-  _pocketRadius: 1.2
+  _pocketHeight: 3
+  _pocketRadius: 3
   _heartTierIndex: 5
+  _clusterSeed: 7
